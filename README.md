@@ -1,16 +1,26 @@
 # Comrade400
 
-A Discord bot that detects small PNG and SVG images, upscales them using nearest-neighbor interpolation, and reposts a crisp, pixel-perfect version. No blur, no smoothing — just clean, sharp pixels.
+A Discord bot that detects small PNG, GIF, and WebP images, upscales them using nearest-neighbor interpolation, and reposts a crisp, pixel-perfect PNG. No blur, no smoothing — just clean, sharp pixels.
 
 ## What it does
 
-When someone posts a small image (128x128 or under), the bot automatically replies with an upscaled version at 400x400. The reply includes size buttons so anyone can grab a **400x400**, **512x512**, or **640x640** version on the fly.
+When someone posts a small image (128x128 or under), the bot automatically replies with an upscaled version at 400x400. The reply includes size buttons to swap between **400x400**, **512x512**, and **640x640**.
 
-Supports PNG and SVG.
+Supports PNG, GIF, and WebP input. Always outputs PNG.
 
 ## Why nearest-neighbor?
 
 Standard resizing algorithms (bilinear, bicubic) blend neighboring pixels together, turning crisp pixel art into a blurry mess. Nearest-neighbor just makes each pixel bigger — no interpolation, no artifacts.
+
+## Saving images on iPhone
+
+iOS Safari converts images to JPEG when you long-press and save directly. JPEG is lossy and will ruin pixel art. To get the actual file:
+
+1. **Long press** the image
+2. **Open in New Tab**
+3. **Save from there** — this preserves the original PNG/WebP format
+
+If you already saved a JPEG, the damage is done — upscaling a JPEG will just make the compression artifacts bigger. Always save the original format first.
 
 ## Setup
 
