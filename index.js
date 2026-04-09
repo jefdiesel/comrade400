@@ -21,28 +21,45 @@ const SIZE_OPTIONS = [400, 512, 640];
 // Cache original images briefly so button clicks can re-render at different sizes
 const imageCache = new Map();
 
-function makeButtons(sourceId) {
+function makeButtons(sourceId, currentSize) {
   const row = new ActionRowBuilder();
   for (const size of SIZE_OPTIONS) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`resize_${sourceId}_${size}`)
-        .setLabel(`Download ${size}x${size}`)
-        .setStyle(ButtonStyle.Secondary)
+        .setLabel(`${size}x${size}`)
+        .setStyle(
+          size === currentSize ? ButtonStyle.Primary : ButtonStyle.Secondary
+        )
     );
   }
   return row;
 }
 
 async function resizeBuffer(buffer, size) {
-  return sharp(buffer)
+  return sharp(buffer, { animated: true })
     .resize(size, size, {
       kernel: sharp.kernel.nearest,
       fit: "contain",
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
-    .png()
     .toBuffer();
+}
+
+function getExtension(contentType, name) {
+  if (contentType?.includes("gif") || name?.endsWith(".gif")) return "gif";
+  if (contentType?.includes("svg") || name?.endsWith(".svg")) return "png";
+  return "png";
+}
+
+function isSupported(contentType, name) {
+  return (
+    contentType?.startsWith("image/png") ||
+    contentType?.includes("gif") ||
+    name?.endsWith(".gif") ||
+    contentType?.includes("svg") ||
+    name?.endsWith(".svg")
+  );
 }
 
 const client = new Client({
@@ -61,16 +78,15 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   for (const attachment of message.attachments.values()) {
-    const isPng = attachment.contentType?.startsWith("image/png");
-    const isSvg =
-      attachment.contentType?.includes("svg") ||
-      attachment.name?.endsWith(".svg");
-    if (!isPng && !isSvg) continue;
+    if (!isSupported(attachment.contentType, attachment.name)) continue;
 
     try {
       const response = await fetch(attachment.url);
       const buffer = Buffer.from(await response.arrayBuffer());
       const metadata = await sharp(buffer).metadata();
+      const isSvg =
+        attachment.contentType?.includes("svg") ||
+        attachment.name?.endsWith(".svg");
 
       const isSmall =
         metadata.width <= MAX_SOURCE_SIZE &&
@@ -80,14 +96,15 @@ client.on("messageCreate", async (message) => {
         imageCache.set(cacheKey, buffer);
         setTimeout(() => imageCache.delete(cacheKey), 10 * 60 * 1000);
 
+        const ext = getExtension(attachment.contentType, attachment.name);
         const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         const file = new AttachmentBuilder(resized, {
-          name: attachment.name || "upscaled.png",
+          name: `upscaled_${DEFAULT_SIZE}x${DEFAULT_SIZE}.${ext}`,
         });
 
         await message.reply({
           files: [file],
-          components: [makeButtons(cacheKey)],
+          components: [makeButtons(cacheKey, DEFAULT_SIZE)],
         });
       }
     } catch (err) {
@@ -114,14 +131,16 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   try {
+    const metadata = await sharp(buffer).metadata();
+    const ext = metadata.format === "gif" ? "gif" : "png";
     const resized = await resizeBuffer(buffer, size);
     const file = new AttachmentBuilder(resized, {
-      name: `upscaled_${size}x${size}.png`,
+      name: `upscaled_${size}x${size}.${ext}`,
     });
 
-    await interaction.reply({
+    await interaction.update({
       files: [file],
-      ephemeral: true,
+      components: [makeButtons(sourceId, size)],
     });
   } catch (err) {
     console.error("Failed to resize on button click:", err.message);
