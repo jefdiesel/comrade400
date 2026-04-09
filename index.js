@@ -48,7 +48,6 @@ async function resizeBuffer(buffer, size) {
 
 function getExtension(contentType, name) {
   if (contentType?.includes("gif") || name?.endsWith(".gif")) return "gif";
-  if (contentType?.includes("svg") || name?.endsWith(".svg")) return "png";
   return "png";
 }
 
@@ -57,8 +56,8 @@ function isSupported(contentType, name) {
     contentType?.startsWith("image/png") ||
     contentType?.includes("gif") ||
     name?.endsWith(".gif") ||
-    contentType?.includes("svg") ||
-    name?.endsWith(".svg")
+    contentType?.includes("webp") ||
+    name?.endsWith(".webp")
   );
 }
 
@@ -84,14 +83,11 @@ client.on("messageCreate", async (message) => {
       const response = await fetch(attachment.url);
       const buffer = Buffer.from(await response.arrayBuffer());
       const metadata = await sharp(buffer).metadata();
-      const isSvg =
-        attachment.contentType?.includes("svg") ||
-        attachment.name?.endsWith(".svg");
 
       const isSmall =
         metadata.width <= MAX_SOURCE_SIZE &&
         metadata.height <= MAX_SOURCE_SIZE;
-      if (isSmall || isSvg) {
+      if (isSmall) {
         const cacheKey = attachment.id;
         imageCache.set(cacheKey, buffer);
         setTimeout(() => imageCache.delete(cacheKey), 10 * 60 * 1000);
