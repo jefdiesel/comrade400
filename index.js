@@ -21,16 +21,14 @@ const SIZE_OPTIONS = [400, 512, 640];
 // Cache original images briefly so button clicks can re-render at different sizes
 const imageCache = new Map();
 
-function makeButtons(sourceId, currentSize) {
+function makeButtons(sourceId) {
   const row = new ActionRowBuilder();
   for (const size of SIZE_OPTIONS) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`resize_${sourceId}_${size}`)
-        .setLabel(`${size}x${size}`)
-        .setStyle(
-          size === currentSize ? ButtonStyle.Primary : ButtonStyle.Secondary
-        )
+        .setLabel(`Download ${size}x${size}`)
+        .setStyle(ButtonStyle.Secondary)
     );
   }
   return row;
@@ -89,7 +87,7 @@ client.on("messageCreate", async (message) => {
 
         await message.reply({
           files: [file],
-          components: [makeButtons(cacheKey, DEFAULT_SIZE)],
+          components: [makeButtons(cacheKey)],
         });
       }
     } catch (err) {
@@ -117,11 +115,13 @@ client.on("interactionCreate", async (interaction) => {
 
   try {
     const resized = await resizeBuffer(buffer, size);
-    const file = new AttachmentBuilder(resized, { name: "upscaled.png" });
+    const file = new AttachmentBuilder(resized, {
+      name: `upscaled_${size}x${size}.png`,
+    });
 
-    await interaction.update({
+    await interaction.reply({
       files: [file],
-      components: [makeButtons(sourceId, size)],
+      ephemeral: true,
     });
   } catch (err) {
     console.error("Failed to resize on button click:", err.message);
