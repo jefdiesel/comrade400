@@ -18,7 +18,7 @@ iOS Safari converts images to JPEG when you long-press and save directly. JPEG i
 
 1. **Long press** the image
 2. **Open in New Tab**
-3. **Save from there** — this preserves the original PNG/WebP format
+3. **Save to phone** — this preserves the original PNG/WebP format
 
 If you already saved a JPEG, the damage is done — upscaling a JPEG will just make the compression artifacts bigger. Always save the original format first.
 
