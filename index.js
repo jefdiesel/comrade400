@@ -161,7 +161,6 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
     .raw()
     .toBuffer();
 
-  const scrollStep = Math.max(1, Math.floor(cityBgWidth / ANIM_FRAMES));
   const frameSize = ANIM_SIZE * ANIM_SIZE * 4;
 
   // Build all frames stacked vertically into one tall raw buffer
@@ -169,12 +168,12 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
   const fullBuffer = Buffer.alloc(ANIM_SIZE * totalHeight * 4);
 
   for (let f = 0; f < ANIM_FRAMES; f++) {
+    // Use fractional step so frame 0 and ANIM_FRAMES align perfectly for seamless loop
     let offset;
     if (rightToLeft) {
-      offset = (cityBgWidth - f * scrollStep) % cityBgWidth;
-      if (offset < 0) offset += cityBgWidth;
+      offset = Math.round(cityBgWidth - (f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
     } else {
-      offset = (f * scrollStep) % cityBgWidth;
+      offset = Math.round((f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
     }
 
     const frameStart = f * frameSize;
