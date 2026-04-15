@@ -289,23 +289,45 @@ client.on("messageCreate", async (message) => {
 client.on("interactionCreate", async (interaction) => {
   // Autocomplete: /animate comrade
   if (interaction.isAutocomplete() && interaction.commandName === "animate") {
-    const query = interaction.options.getFocused().toLowerCase();
+    const query = interaction.options.getFocused().toLowerCase().trim();
     const results = [];
+
+    if (!query) {
+      // Show some notable named characters when empty
+      const featured = [];
+      for (const [num, filename] of comradeIndex) {
+        const name = filename.replace(/\.\w+$/, "");
+        if (!name.startsWith("Pizza Comrade")) {
+          featured.push({ name, value: String(num) });
+        }
+        if (featured.length >= 25) break;
+      }
+      await interaction.respond(featured);
+      return;
+    }
+
+    // Exact name starts-with first, then includes, then number match
+    const startsWith = [];
+    const includes = [];
+    const numMatch = [];
 
     for (const [num, filename] of comradeIndex) {
       const label = filename.replace(/\.\w+$/, "");
+      const lower = label.toLowerCase();
       const numStr = String(num);
-      if (
-        !query ||
-        label.toLowerCase().includes(query) ||
-        numStr.startsWith(query)
-      ) {
-        results.push({ name: label, value: numStr });
+      const entry = { name: label, value: numStr };
+
+      if (lower.startsWith(query)) {
+        startsWith.push(entry);
+      } else if (lower.includes(query)) {
+        includes.push(entry);
+      } else if (numStr.startsWith(query)) {
+        numMatch.push(entry);
       }
-      if (results.length >= 25) break;
     }
 
-    await interaction.respond(results);
+    const combined = [...startsWith, ...includes, ...numMatch].slice(0, 25);
+    await interaction.respond(combined);
     return;
   }
 
@@ -313,12 +335,25 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "animate") {
     await interaction.deferReply();
 
-    const itemNumber = parseInt(interaction.options.getString("comrade"));
+    const input = interaction.options.getString("comrade").trim();
     const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+
+    // Resolve input: could be a number from autocomplete or a typed name
+    let itemNumber = parseInt(input);
+    if (isNaN(itemNumber)) {
+      // Search by name
+      const lower = input.toLowerCase();
+      for (const [num, filename] of comradeIndex) {
+        if (filename.replace(/\.\w+$/, "").toLowerCase().includes(lower)) {
+          itemNumber = num;
+          break;
+        }
+      }
+    }
 
     const comradeName = comradeIndex.get(itemNumber);
     if (!comradeName) {
-      await interaction.editReply(`Comrade #${itemNumber} not found.`);
+      await interaction.editReply(`Comrade "${input}" not found. Try the autocomplete suggestions.`);
       return;
     }
 
