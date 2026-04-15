@@ -160,7 +160,7 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth) {
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY) {
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -225,7 +225,7 @@ async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = 
       .toBuffer();
     upscaledFrames.push(upscaled);
   }
-  const delays = new Array(upscaledFrames.length).fill(ANIM_FRAME_DELAY);
+  const delays = new Array(upscaledFrames.length).fill(frameDelay);
   const bigBuffer = Buffer.concat(upscaledFrames);
   const bigTotalHeight = DEFAULT_SIZE * upscaledFrames.length;
   return sharp(bigBuffer, {
@@ -341,12 +341,29 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const fastCommand = new SlashCommandBuilder()
+    .setName("fast")
+    .setDescription("Animate a Pizza Comrade at 1.5x speed over Pepperonia City")
+    .addStringOption((opt) =>
+      opt
+        .setName("comrade")
+        .setDescription("Search by name or item number")
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("rightleft")
+        .setDescription("Scroll right-to-left instead of left-to-right")
+        .setRequired(false)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
-    body: [command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON()],
+    body: [command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(), fastCommand.toJSON()],
   });
-  console.log("Registered /animate, /bg, and /blur commands (guild)");
+  console.log("Registered /animate, /bg, /blur, and /fast commands (guild)");
 });
 
 // Auto-resize on image upload
@@ -387,7 +404,7 @@ client.on("messageCreate", async (message) => {
 
 client.on("interactionCreate", async (interaction) => {
   // Autocomplete: /animate or /blur comrade
-  if (interaction.isAutocomplete() && (interaction.commandName === "animate" || interaction.commandName === "blur")) {
+  if (interaction.isAutocomplete() && (interaction.commandName === "animate" || interaction.commandName === "blur" || interaction.commandName === "fast")) {
     const query = interaction.options.getFocused().toLowerCase().trim();
     const results = [];
 
@@ -499,6 +516,61 @@ client.on("interactionCreate", async (interaction) => {
       });
     } catch (err) {
       console.error("Blur failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
+    }
+    return;
+  }
+
+  // Slash command: /fast (1.5x speed animate)
+  if (interaction.isChatInputCommand() && interaction.commandName === "fast") {
+    await interaction.deferReply();
+
+    const input = interaction.options.getString("comrade")?.trim() ?? "";
+    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    console.log(`/fast input: "${input}"`);
+
+    let itemNumber = parseInt(input);
+    if (isNaN(itemNumber)) {
+      const lower = input.toLowerCase();
+      for (const [num, filename] of comradeIndex) {
+        const name = filename.replace(/\.\w+$/, "").toLowerCase();
+        if (name.includes(lower)) {
+          itemNumber = num;
+          break;
+        }
+      }
+    }
+
+    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
+      return;
+    }
+
+    const comradeName = comradeIndex.get(itemNumber);
+
+    try {
+      const buffer = await fetchComrade(itemNumber);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
+        return;
+      }
+
+      const gif = await buildAnimatedGif(buffer, rightToLeft, cityBg, cityBgWidth, 60);
+      const direction = rightToLeft ? "→" : "←";
+      const label = comradeName.replace(/\.\w+$/, "");
+      const file = new AttachmentBuilder(gif, {
+        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}_fast.gif`,
+      });
+
+      await interaction.editReply({
+        content: `**${label}** ${direction} ⚡`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("Fast failed:", err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
     }
