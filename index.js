@@ -335,8 +335,9 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "animate") {
     await interaction.deferReply();
 
-    const input = interaction.options.getString("comrade").trim();
+    const input = interaction.options.getString("comrade")?.trim() ?? "";
     const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    console.log(`/animate input: "${input}"`);
 
     // Resolve input: could be a number from autocomplete or a typed name
     let itemNumber = parseInt(input);
@@ -344,18 +345,21 @@ client.on("interactionCreate", async (interaction) => {
       // Search by name
       const lower = input.toLowerCase();
       for (const [num, filename] of comradeIndex) {
-        if (filename.replace(/\.\w+$/, "").toLowerCase().includes(lower)) {
+        const name = filename.replace(/\.\w+$/, "").toLowerCase();
+        if (name.includes(lower)) {
           itemNumber = num;
+          console.log(`Matched "${input}" -> #${num} (${filename})`);
           break;
         }
       }
     }
 
-    const comradeName = comradeIndex.get(itemNumber);
-    if (!comradeName) {
-      await interaction.editReply(`Comrade "${input}" not found. Try the autocomplete suggestions.`);
+    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
+      await interaction.editReply(`Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`);
       return;
     }
+
+    const comradeName = comradeIndex.get(itemNumber);
 
     try {
       const buffer = await fetchComrade(itemNumber);
