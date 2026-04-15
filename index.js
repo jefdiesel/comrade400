@@ -214,11 +214,12 @@ client.once("ready", async () => {
     .setDescription(
       "Animate a Pizza Comrade over the Pepperonia City skyline"
     )
-    .addIntegerOption((opt) =>
+    .addStringOption((opt) =>
       opt
-        .setName("item")
-        .setDescription("Comrade item number (e.g. 1457)")
+        .setName("comrade")
+        .setDescription("Search by name or item number")
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addBooleanOption((opt) =>
       opt
@@ -271,11 +272,33 @@ client.on("messageCreate", async (message) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
+  // Autocomplete: /animate comrade
+  if (interaction.isAutocomplete() && interaction.commandName === "animate") {
+    const query = interaction.options.getFocused().toLowerCase();
+    const results = [];
+
+    for (const [num, filename] of comradeIndex) {
+      const label = filename.replace(/\.\w+$/, "");
+      const numStr = String(num);
+      if (
+        !query ||
+        label.toLowerCase().includes(query) ||
+        numStr.startsWith(query)
+      ) {
+        results.push({ name: label, value: numStr });
+      }
+      if (results.length >= 25) break;
+    }
+
+    await interaction.respond(results);
+    return;
+  }
+
   // Slash command: /animate
   if (interaction.isChatInputCommand() && interaction.commandName === "animate") {
     await interaction.deferReply();
 
-    const itemNumber = interaction.options.getInteger("item");
+    const itemNumber = parseInt(interaction.options.getString("comrade"));
     const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
 
     const comradeName = comradeIndex.get(itemNumber);
