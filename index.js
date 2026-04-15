@@ -27,11 +27,42 @@ const ANIM_FRAMES = 32;
 const ANIM_FRAME_DELAY = 100;
 const ANIM_SIZE = 64;
 
+const COMRADE_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px_noBG/";
+
 // Cache original images briefly so button clicks can re-render at different sizes
 const imageCache = new Map();
 
+// Map of item number -> filename from the repo
+const comradeIndex = new Map();
+
 let cityBg = null;
 let cityBgWidth = 0;
+
+async function loadComradeIndex() {
+  const treeUrl =
+    "https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/800e0f88f385f091d226083d3fda0a47d2949247";
+  const resp = await fetch(treeUrl, {
+    headers: { "User-Agent": "comrade400-bot" },
+  });
+  const data = await resp.json();
+  for (const item of data.tree) {
+    const match = item.path.match(/#(\d+)\.\w+$/);
+    if (match) {
+      comradeIndex.set(parseInt(match[1]), item.path);
+    }
+  }
+  console.log(`Comrade index loaded: ${comradeIndex.size} items`);
+}
+
+async function fetchComrade(itemNumber) {
+  const filename = comradeIndex.get(itemNumber);
+  if (!filename) return null;
+  const url = COMRADE_BASE_URL + encodeURIComponent(filename);
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  return Buffer.from(await resp.arrayBuffer());
+}
 
 async function loadCityBackground() {
   const raw = await sharp(path.join(__dirname, "city_bg.webp"))
@@ -181,12 +212,12 @@ client.once("ready", async () => {
   const command = new SlashCommandBuilder()
     .setName("animate")
     .setDescription(
-      "Animate a pixel art character over the Pepperonia City skyline"
+      "Animate a Pizza Comrade over the Pepperonia City skyline"
     )
-    .addAttachmentOption((opt) =>
+    .addIntegerOption((opt) =>
       opt
-        .setName("image")
-        .setDescription("Character image (small pixel art)")
+        .setName("item")
+        .setDescription("Comrade item number (e.g. 1457)")
         .setRequired(true)
     )
     .addBooleanOption((opt) =>
@@ -244,32 +275,31 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "animate") {
     await interaction.deferReply();
 
-    const attachment = interaction.options.getAttachment("image");
+    const itemNumber = interaction.options.getInteger("item");
     const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
 
-    if (!isSupported(attachment.contentType, attachment.name)) {
-      await interaction.editReply("Unsupported format — use PNG, GIF, or WebP.");
+    const comradeName = comradeIndex.get(itemNumber);
+    if (!comradeName) {
+      await interaction.editReply(`Comrade #${itemNumber} not found.`);
       return;
     }
 
     try {
-      const response = await fetch(attachment.url);
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const metadata = await sharp(buffer).metadata();
-
-      if (metadata.width > MAX_SOURCE_SIZE || metadata.height > MAX_SOURCE_SIZE) {
-        await interaction.editReply(
-          `Image too large (${metadata.width}x${metadata.height}). Max ${MAX_SOURCE_SIZE}x${MAX_SOURCE_SIZE}.`
-        );
+      const buffer = await fetchComrade(itemNumber);
+      if (!buffer) {
+        await interaction.editReply(`Failed to download Comrade #${itemNumber}.`);
         return;
       }
 
       const gif = await buildAnimatedGif(buffer, rightToLeft);
-      const direction = rightToLeft ? "right-to-left" : "left-to-right";
-      const file = new AttachmentBuilder(gif, { name: "animated.gif" });
+      const direction = rightToLeft ? "→" : "←";
+      const label = comradeName.replace(/\.\w+$/, "");
+      const file = new AttachmentBuilder(gif, {
+        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}.gif`,
+      });
 
       await interaction.editReply({
-        content: `64x64 animation (${direction})`,
+        content: `**${label}** ${direction}`,
         files: [file],
       });
     } catch (err) {
@@ -318,4 +348,6 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-loadCityBackground().then(() => client.login(TOKEN));
+Promise.all([loadCityBackground(), loadComradeIndex()]).then(() =>
+  client.login(TOKEN)
+);
