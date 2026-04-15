@@ -224,6 +224,54 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
     .toBuffer();
 }
 
+// Build a scrolling city background GIF with no character
+async function buildBgGif(rightToLeft) {
+  const frameSize = ANIM_SIZE * ANIM_SIZE * 4;
+  const fullBuffer = Buffer.alloc(frameSize * ANIM_FRAMES);
+
+  for (let f = 0; f < ANIM_FRAMES; f++) {
+    let offset;
+    if (rightToLeft) {
+      offset = Math.round(cityBgWidth - (f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+    } else {
+      offset = Math.round((f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+    }
+    const frameStart = f * frameSize;
+    for (let y = 0; y < ANIM_SIZE; y++) {
+      for (let x = 0; x < ANIM_SIZE; x++) {
+        const bgX = (offset + x) % cityBgWidth;
+        const bgIdx = (y * cityBgWidth + bgX) * 4;
+        const outIdx = frameStart + (y * ANIM_SIZE + x) * 4;
+        fullBuffer[outIdx] = cityBg[bgIdx];
+        fullBuffer[outIdx + 1] = cityBg[bgIdx + 1];
+        fullBuffer[outIdx + 2] = cityBg[bgIdx + 2];
+        fullBuffer[outIdx + 3] = cityBg[bgIdx + 3];
+      }
+    }
+  }
+
+  const upscaledFrames = [];
+  for (let f = 0; f < ANIM_FRAMES; f++) {
+    const frameStart = f * frameSize;
+    const frameData = fullBuffer.subarray(frameStart, frameStart + frameSize);
+    const upscaled = await sharp(frameData, {
+      raw: { width: ANIM_SIZE, height: ANIM_SIZE, channels: 4 },
+    })
+      .resize(DEFAULT_SIZE, DEFAULT_SIZE, { kernel: sharp.kernel.nearest })
+      .raw()
+      .toBuffer();
+    upscaledFrames.push(upscaled);
+  }
+  const delays = new Array(upscaledFrames.length).fill(ANIM_FRAME_DELAY);
+  const bigBuffer = Buffer.concat(upscaledFrames);
+  const bigTotalHeight = DEFAULT_SIZE * upscaledFrames.length;
+  return sharp(bigBuffer, {
+    raw: { width: DEFAULT_SIZE, height: bigTotalHeight, channels: 4, pageHeight: DEFAULT_SIZE },
+  })
+    .gif({ loop: 0, delay: delays, pageHeight: DEFAULT_SIZE })
+    .toBuffer();
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -255,12 +303,22 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const bgCommand = new SlashCommandBuilder()
+    .setName("bg")
+    .setDescription("Show the scrolling Pepperonia City skyline")
+    .addBooleanOption((opt) =>
+      opt
+        .setName("rightleft")
+        .setDescription("Scroll right-to-left instead of left-to-right")
+        .setRequired(false)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
-    body: [command.toJSON()],
+    body: [command.toJSON(), bgCommand.toJSON()],
   });
-  console.log("Registered /animate command (guild)");
+  console.log("Registered /animate and /bg commands (guild)");
 });
 
 // Auto-resize on image upload
@@ -341,6 +399,26 @@ client.on("interactionCreate", async (interaction) => {
 
     const combined = [...startsWith, ...includes, ...numMatch].slice(0, 25);
     await interaction.respond(combined);
+    return;
+  }
+
+  // Slash command: /bg
+  if (interaction.isChatInputCommand() && interaction.commandName === "bg") {
+    await interaction.deferReply();
+    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    try {
+      const gif = await buildBgGif(rightToLeft);
+      const file = new AttachmentBuilder(gif, { name: "pepperonia_city.gif" });
+      const direction = rightToLeft ? "→" : "←";
+      await interaction.editReply({
+        content: `**Pepperonia City** ${direction}`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("BG failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create background animation.", ephemeral: true });
+    }
     return;
   }
 
