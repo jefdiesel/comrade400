@@ -191,9 +191,9 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
   // Create animated GIF from stacked frames
   const delays = new Array(ANIM_FRAMES).fill(ANIM_FRAME_DELAY);
   return sharp(fullBuffer, {
-    raw: { width: ANIM_SIZE, height: totalHeight, channels: 4 },
+    raw: { width: ANIM_SIZE, height: totalHeight, channels: 4, pageHeight: ANIM_SIZE },
   })
-    .gif({ loop: 0, delay: delays })
+    .gif({ loop: 0, delay: delays, pageHeight: ANIM_SIZE })
     .toBuffer();
 }
 
