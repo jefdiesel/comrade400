@@ -29,12 +29,21 @@ const ANIM_SIZE = 64;
 
 const COMRADE_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px_noBG/";
+const CDC_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/call-data-comrades/cdc_32px/";
+const COTD_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/comrades-of-the-dead/cotd_32px/";
+const PC_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px/";
 
 // Cache original images briefly so button clicks can re-render at different sizes
 const imageCache = new Map();
 
 // Map of item number -> filename from the repo
 const comradeIndex = new Map();
+const cdcIndex = new Map(); // number -> { sub, filename } (subcategory path)
+const cotdIndex = new Map(); // number -> filename
+const pcIndex = new Map(); // number -> filename
 
 let cityBg = null;
 let cityBgWidth = 0;
@@ -69,6 +78,68 @@ async function loadComradeIndex() {
     }
   }
   console.log(`Comrade index loaded: ${comradeIndex.size} items`);
+}
+
+async function loadCollectionIndex(dirPath, indexMap, useSubfolders = false) {
+  const headers = { "User-Agent": "comrade400-bot" };
+  const branchResp = await fetch(
+    "https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/main?recursive=1",
+    { headers }
+  );
+  const branchData = await branchResp.json();
+
+  if (useSubfolders) {
+    // CDC has subcategories — scan all subtrees under dirPath
+    const subDirs = branchData.tree.filter(
+      (t) => t.path.startsWith(dirPath + "/") && t.type === "tree"
+    );
+    for (const sub of subDirs) {
+      const subName = sub.path.replace(dirPath + "/", "");
+      const treeResp = await fetch(
+        `https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/${sub.sha}`,
+        { headers }
+      );
+      const treeData = await treeResp.json();
+      for (const item of treeData.tree) {
+        const match = item.path.match(/#(\d+)\.\w+$/);
+        if (match) {
+          indexMap.set(parseInt(match[1]), { sub: subName, filename: item.path });
+        }
+      }
+    }
+  } else {
+    const dir = branchData.tree.find(
+      (t) => t.path === dirPath && t.type === "tree"
+    );
+    if (!dir) {
+      console.error(`Could not find ${dirPath} in repo tree`);
+      return;
+    }
+    const treeResp = await fetch(
+      `https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/${dir.sha}`,
+      { headers }
+    );
+    const treeData = await treeResp.json();
+    for (const item of treeData.tree) {
+      const match = item.path.match(/#(\d+)\.\w+$/);
+      if (match) {
+        indexMap.set(parseInt(match[1]), item.path);
+      }
+    }
+  }
+  console.log(`Index loaded for ${dirPath}: ${indexMap.size} items`);
+}
+
+function fetchFromIndex(indexMap, baseUrl, itemNumber, useSubfolders = false) {
+  const entry = indexMap.get(itemNumber);
+  if (!entry) return null;
+  let url;
+  if (useSubfolders) {
+    url = baseUrl + entry.sub + "/" + encodeURIComponent(entry.filename);
+  } else {
+    url = baseUrl + encodeURIComponent(entry);
+  }
+  return fetch(url).then((r) => (r.ok ? r.arrayBuffer().then(Buffer.from) : null));
 }
 
 async function fetchComrade(itemNumber) {
@@ -375,12 +446,37 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const cdcCommand = new SlashCommandBuilder()
+    .setName("cdc")
+    .setDescription("Display a Call Data Comrade at 400x400")
+    .addIntegerOption((opt) =>
+      opt.setName("id").setDescription("Item number").setRequired(true)
+    );
+
+  const cotcCommand = new SlashCommandBuilder()
+    .setName("cotc")
+    .setDescription("Display a Comrade of the Dead at 400x400")
+    .addIntegerOption((opt) =>
+      opt.setName("id").setDescription("Item number").setRequired(true)
+    );
+
+  const pizzacomradesCommand = new SlashCommandBuilder()
+    .setName("pizzacomrades")
+    .setDescription("Display a Pizza Comrade at 400x400")
+    .addIntegerOption((opt) =>
+      opt.setName("id").setDescription("Item number").setRequired(true)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
-    body: [command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(), fastCommand.toJSON(), brawndorCommand.toJSON()],
+    body: [
+      command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(),
+      fastCommand.toJSON(), brawndorCommand.toJSON(),
+      cdcCommand.toJSON(), cotcCommand.toJSON(), pizzacomradesCommand.toJSON(),
+    ],
   });
-  console.log("Registered /animate, /bg, /blur, /fast, and /brawndor_speed commands (guild)");
+  console.log("Registered all commands (guild)");
 });
 
 // Auto-resize on image upload
@@ -461,6 +557,41 @@ client.on("interactionCreate", async (interaction) => {
 
     const combined = [...startsWith, ...includes, ...numMatch].slice(0, 25);
     await interaction.respond(combined);
+    return;
+  }
+
+  // Slash command: /cdc, /cotc, /pizzacomrades — display collection items
+  if (interaction.isChatInputCommand() && ["cdc", "cotc", "pizzacomrades"].includes(interaction.commandName)) {
+    await interaction.deferReply();
+    const id = interaction.options.getInteger("id");
+
+    let buffer, label;
+    if (interaction.commandName === "cdc") {
+      buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
+      label = `Call Data Comrade #${id}`;
+    } else if (interaction.commandName === "cotc") {
+      buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
+      label = `Comrade of the Dead #${id}`;
+    } else {
+      buffer = await fetchFromIndex(pcIndex, PC_BASE_URL, id);
+      label = `Pizza Comrade #${id}`;
+    }
+
+    if (!buffer) {
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `#${id} not found in this collection.`, ephemeral: true });
+      return;
+    }
+
+    try {
+      const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+      const file = new AttachmentBuilder(resized, { name: `${interaction.commandName}_${id}.png` });
+      await interaction.editReply({ content: `**${label}**`, files: [file] });
+    } catch (err) {
+      console.error(`${interaction.commandName} failed:`, err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+    }
     return;
   }
 
@@ -746,6 +877,10 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-Promise.all([loadCityBackground(), loadComradeIndex()]).then(() =>
-  client.login(TOKEN)
-);
+Promise.all([
+  loadCityBackground(),
+  loadComradeIndex(),
+  loadCollectionIndex("art/call-data-comrades/cdc_32px", cdcIndex, true),
+  loadCollectionIndex("art/comrades-of-the-dead/cotd_32px", cotdIndex),
+  loadCollectionIndex("art/pizza-comrades/pc_64px", pcIndex),
+]).then(() => client.login(TOKEN));
