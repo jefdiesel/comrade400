@@ -229,10 +229,11 @@ client.once("ready", async () => {
     );
 
   const rest = new REST().setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), {
+  const guildId = "1369930881267142686";
+  await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [command.toJSON()],
   });
-  console.log("Registered /animate command");
+  console.log("Registered /animate command (guild)");
 });
 
 // Auto-resize on image upload
