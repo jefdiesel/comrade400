@@ -24,7 +24,7 @@ const SIZE_OPTIONS = [400, 512, 640];
 const MAX_CACHE_ENTRIES = 100;
 
 const ANIM_FRAMES = 128;
-const ANIM_FRAME_DELAY = 100;
+const ANIM_FRAME_DELAY = 90;
 const ANIM_SIZE = 64;
 
 const COMRADE_BASE_URL =
