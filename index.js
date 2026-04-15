@@ -38,6 +38,8 @@ const comradeIndex = new Map();
 
 let cityBg = null;
 let cityBgWidth = 0;
+let cityBgBlur = null;
+let cityBgBlurWidth = 0;
 
 async function loadComradeIndex() {
   // Resolve the latest tree SHA for the target directory via the Git Trees API (recursive)
@@ -87,6 +89,15 @@ async function loadCityBackground() {
   cityBgWidth = raw.info.width;
   cityBg = raw.data;
   console.log(`City background loaded: ${cityBgWidth}x${ANIM_SIZE}`);
+
+  const rawBlur = await sharp(path.join(__dirname, "city_bg_blur.webp"))
+    .resize({ height: ANIM_SIZE, kernel: sharp.kernel.nearest })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  cityBgBlurWidth = rawBlur.info.width;
+  cityBgBlur = rawBlur.data;
+  console.log(`City background (blur) loaded: ${cityBgBlurWidth}x${ANIM_SIZE}`);
 }
 
 function cacheSet(key, buffer) {
@@ -149,7 +160,7 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft) {
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth) {
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -171,17 +182,17 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
     // Use fractional step so frame 0 and ANIM_FRAMES align perfectly for seamless loop
     let offset;
     if (rightToLeft) {
-      offset = Math.round(cityBgWidth - (f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+      offset = Math.round(bgWidth - (f * bgWidth) / ANIM_FRAMES) % bgWidth;
     } else {
-      offset = Math.round((f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+      offset = Math.round((f * bgWidth) / ANIM_FRAMES) % bgWidth;
     }
 
     const frameStart = f * frameSize;
 
     for (let y = 0; y < ANIM_SIZE; y++) {
       for (let x = 0; x < ANIM_SIZE; x++) {
-        const bgX = (offset + x) % cityBgWidth;
-        const bgIdx = (y * cityBgWidth + bgX) * 4;
+        const bgX = (offset + x) % bgWidth;
+        const bgIdx = (y * bgWidth + bgX) * 4;
         const charIdx = (y * ANIM_SIZE + x) * 4;
         const outIdx = frameStart + (y * ANIM_SIZE + x) * 4;
 
@@ -192,16 +203,16 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
           fullBuffer[outIdx + 2] = charRaw[charIdx + 2];
           fullBuffer[outIdx + 3] = 255;
         } else {
-          fullBuffer[outIdx] = cityBg[bgIdx];
-          fullBuffer[outIdx + 1] = cityBg[bgIdx + 1];
-          fullBuffer[outIdx + 2] = cityBg[bgIdx + 2];
-          fullBuffer[outIdx + 3] = cityBg[bgIdx + 3];
+          fullBuffer[outIdx] = bg[bgIdx];
+          fullBuffer[outIdx + 1] = bg[bgIdx + 1];
+          fullBuffer[outIdx + 2] = bg[bgIdx + 2];
+          fullBuffer[outIdx + 3] = bg[bgIdx + 3];
         }
       }
     }
   }
 
-  // Upscale each frame to 400x400, duplicate each for smoother animation
+  // Upscale each frame to 400x400
   const upscaledFrames = [];
   for (let f = 0; f < ANIM_FRAMES; f++) {
     const frameStart = f * frameSize;
@@ -225,27 +236,27 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
 }
 
 // Build a scrolling city background GIF with no character
-async function buildBgGif(rightToLeft) {
+async function buildBgGif(rightToLeft, bg = cityBg, bgWidth = cityBgWidth) {
   const frameSize = ANIM_SIZE * ANIM_SIZE * 4;
   const fullBuffer = Buffer.alloc(frameSize * ANIM_FRAMES);
 
   for (let f = 0; f < ANIM_FRAMES; f++) {
     let offset;
     if (rightToLeft) {
-      offset = Math.round(cityBgWidth - (f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+      offset = Math.round(bgWidth - (f * bgWidth) / ANIM_FRAMES) % bgWidth;
     } else {
-      offset = Math.round((f * cityBgWidth) / ANIM_FRAMES) % cityBgWidth;
+      offset = Math.round((f * bgWidth) / ANIM_FRAMES) % bgWidth;
     }
     const frameStart = f * frameSize;
     for (let y = 0; y < ANIM_SIZE; y++) {
       for (let x = 0; x < ANIM_SIZE; x++) {
-        const bgX = (offset + x) % cityBgWidth;
-        const bgIdx = (y * cityBgWidth + bgX) * 4;
+        const bgX = (offset + x) % bgWidth;
+        const bgIdx = (y * bgWidth + bgX) * 4;
         const outIdx = frameStart + (y * ANIM_SIZE + x) * 4;
-        fullBuffer[outIdx] = cityBg[bgIdx];
-        fullBuffer[outIdx + 1] = cityBg[bgIdx + 1];
-        fullBuffer[outIdx + 2] = cityBg[bgIdx + 2];
-        fullBuffer[outIdx + 3] = cityBg[bgIdx + 3];
+        fullBuffer[outIdx] = bg[bgIdx];
+        fullBuffer[outIdx + 1] = bg[bgIdx + 1];
+        fullBuffer[outIdx + 2] = bg[bgIdx + 2];
+        fullBuffer[outIdx + 3] = bg[bgIdx + 3];
       }
     }
   }
@@ -313,12 +324,29 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const blurCommand = new SlashCommandBuilder()
+    .setName("blur")
+    .setDescription("Animate a Pizza Comrade over the blurred Pepperonia City skyline")
+    .addStringOption((opt) =>
+      opt
+        .setName("comrade")
+        .setDescription("Search by name or item number")
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("rightleft")
+        .setDescription("Scroll right-to-left instead of left-to-right")
+        .setRequired(false)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
-    body: [command.toJSON(), bgCommand.toJSON()],
+    body: [command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON()],
   });
-  console.log("Registered /animate and /bg commands (guild)");
+  console.log("Registered /animate, /bg, and /blur commands (guild)");
 });
 
 // Auto-resize on image upload
@@ -358,8 +386,8 @@ client.on("messageCreate", async (message) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  // Autocomplete: /animate comrade
-  if (interaction.isAutocomplete() && interaction.commandName === "animate") {
+  // Autocomplete: /animate or /blur comrade
+  if (interaction.isAutocomplete() && (interaction.commandName === "animate" || interaction.commandName === "blur")) {
     const query = interaction.options.getFocused().toLowerCase().trim();
     const results = [];
 
@@ -418,6 +446,61 @@ client.on("interactionCreate", async (interaction) => {
       console.error("BG failed:", err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to create background animation.", ephemeral: true });
+    }
+    return;
+  }
+
+  // Slash command: /blur
+  if (interaction.isChatInputCommand() && interaction.commandName === "blur") {
+    await interaction.deferReply();
+
+    const input = interaction.options.getString("comrade")?.trim() ?? "";
+    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    console.log(`/blur input: "${input}"`);
+
+    let itemNumber = parseInt(input);
+    if (isNaN(itemNumber)) {
+      const lower = input.toLowerCase();
+      for (const [num, filename] of comradeIndex) {
+        const name = filename.replace(/\.\w+$/, "").toLowerCase();
+        if (name.includes(lower)) {
+          itemNumber = num;
+          break;
+        }
+      }
+    }
+
+    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
+      return;
+    }
+
+    const comradeName = comradeIndex.get(itemNumber);
+
+    try {
+      const buffer = await fetchComrade(itemNumber);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
+        return;
+      }
+
+      const gif = await buildAnimatedGif(buffer, rightToLeft, cityBgBlur, cityBgBlurWidth);
+      const direction = rightToLeft ? "→" : "←";
+      const label = comradeName.replace(/\.\w+$/, "");
+      const file = new AttachmentBuilder(gif, {
+        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}_blur.gif`,
+      });
+
+      await interaction.editReply({
+        content: `**${label}** ${direction}`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("Blur failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
     }
     return;
   }
