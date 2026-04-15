@@ -188,12 +188,17 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
     }
   }
 
-  // Create animated GIF from stacked frames
+  // Create animated GIF from stacked frames, then upscale to 400x400
   const delays = new Array(ANIM_FRAMES).fill(ANIM_FRAME_DELAY);
+  const upscaleHeight = DEFAULT_SIZE * ANIM_FRAMES;
   return sharp(fullBuffer, {
     raw: { width: ANIM_SIZE, height: totalHeight, channels: 4, pageHeight: ANIM_SIZE },
   })
-    .gif({ loop: 0, delay: delays, pageHeight: ANIM_SIZE })
+    .resize(DEFAULT_SIZE, upscaleHeight, {
+      kernel: sharp.kernel.nearest,
+      pageHeight: ANIM_SIZE,
+    })
+    .gif({ loop: 0, delay: delays, pageHeight: DEFAULT_SIZE })
     .toBuffer();
 }
 
