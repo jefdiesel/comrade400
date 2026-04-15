@@ -24,7 +24,7 @@ const SIZE_OPTIONS = [400, 512, 640];
 const MAX_CACHE_ENTRIES = 100;
 
 const ANIM_FRAMES = 32;
-const ANIM_FRAME_DELAY = 100;
+const ANIM_FRAME_DELAY = 180;
 const ANIM_SIZE = 64;
 
 const COMRADE_BASE_URL =
@@ -40,22 +40,30 @@ let cityBg = null;
 let cityBgWidth = 0;
 
 async function loadComradeIndex() {
-  const contentsUrl =
-    "https://api.github.com/repos/NoMoreLabs/Comrades/contents/art/pizza-comrades/pc_64px_noBG";
-  let page = 1;
-  let items = [];
-  // Contents API returns all items for a directory in one call
-  const resp = await fetch(contentsUrl, {
-    headers: { "User-Agent": "comrade400-bot" },
-  });
-  const data = await resp.json();
-  if (Array.isArray(data)) {
-    items = data;
+  // Resolve the latest tree SHA for the target directory via the Git Trees API (recursive)
+  const headers = { "User-Agent": "comrade400-bot" };
+  const branchResp = await fetch(
+    "https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/main?recursive=1",
+    { headers }
+  );
+  const branchData = await branchResp.json();
+  const dir = branchData.tree.find(
+    (t) => t.path === "art/pizza-comrades/pc_64px_noBG" && t.type === "tree"
+  );
+  if (!dir) {
+    console.error("Could not find pc_64px_noBG directory in repo tree");
+    return;
   }
-  for (const item of items) {
-    const match = item.name.match(/#(\d+)\.\w+$/);
+  // Fetch that subtree to get all files (no 1000-item cap)
+  const treeResp = await fetch(
+    `https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/${dir.sha}`,
+    { headers }
+  );
+  const treeData = await treeResp.json();
+  for (const item of treeData.tree) {
+    const match = item.path.match(/#(\d+)\.\w+$/);
     if (match) {
-      comradeIndex.set(parseInt(match[1]), item.name);
+      comradeIndex.set(parseInt(match[1]), item.path);
     }
   }
   console.log(`Comrade index loaded: ${comradeIndex.size} items`);
