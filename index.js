@@ -202,8 +202,7 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
     }
   }
 
-  // Upscale each frame to 400x400, then stack into animated GIF
-  const delays = new Array(ANIM_FRAMES).fill(ANIM_FRAME_DELAY);
+  // Upscale each frame to 400x400, duplicate each for smoother animation
   const upscaledFrames = [];
   for (let f = 0; f < ANIM_FRAMES; f++) {
     const frameStart = f * frameSize;
@@ -215,9 +214,11 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
       .raw()
       .toBuffer();
     upscaledFrames.push(upscaled);
+    upscaledFrames.push(upscaled);
   }
+  const delays = new Array(upscaledFrames.length).fill(ANIM_FRAME_DELAY);
   const bigBuffer = Buffer.concat(upscaledFrames);
-  const bigTotalHeight = DEFAULT_SIZE * ANIM_FRAMES;
+  const bigTotalHeight = DEFAULT_SIZE * upscaledFrames.length;
   return sharp(bigBuffer, {
     raw: { width: DEFAULT_SIZE, height: bigTotalHeight, channels: 4, pageHeight: DEFAULT_SIZE },
   })
