@@ -453,8 +453,8 @@ client.once("ready", async () => {
       opt.setName("id").setDescription("Item number").setRequired(true)
     );
 
-  const cotcCommand = new SlashCommandBuilder()
-    .setName("cotc")
+  const cotdCommand = new SlashCommandBuilder()
+    .setName("cotd")
     .setDescription("Display a Comrade of the Dead at 400x400")
     .addIntegerOption((opt) =>
       opt.setName("id").setDescription("Item number").setRequired(true)
@@ -473,7 +473,7 @@ client.once("ready", async () => {
     body: [
       command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(),
       fastCommand.toJSON(), brawndorCommand.toJSON(),
-      cdcCommand.toJSON(), cotcCommand.toJSON(), pizzacomradesCommand.toJSON(),
+      cdcCommand.toJSON(), cotdCommand.toJSON(), pizzacomradesCommand.toJSON(),
     ],
   });
   console.log("Registered all commands (guild)");
@@ -560,8 +560,8 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // Slash command: /cdc, /cotc, /pizzacomrades — display collection items
-  if (interaction.isChatInputCommand() && ["cdc", "cotc", "pizzacomrades"].includes(interaction.commandName)) {
+  // Slash command: /cdc, /cotd, /pizzacomrades — display collection items
+  if (interaction.isChatInputCommand() && ["cdc", "cotd", "pizzacomrades"].includes(interaction.commandName)) {
     await interaction.deferReply();
     const id = interaction.options.getInteger("id");
 
@@ -569,7 +569,7 @@ client.on("interactionCreate", async (interaction) => {
     if (interaction.commandName === "cdc") {
       buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
       label = `Call Data Comrade #${id}`;
-    } else if (interaction.commandName === "cotc") {
+    } else if (interaction.commandName === "cotd") {
       buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
       label = `Comrade of the Dead #${id}`;
     } else {
