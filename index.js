@@ -23,8 +23,8 @@ const MAX_SOURCE_SIZE = 128;
 const SIZE_OPTIONS = [400, 512, 640];
 const MAX_CACHE_ENTRIES = 100;
 
-const ANIM_FRAMES = 32;
-const ANIM_FRAME_DELAY = 180;
+const ANIM_FRAMES = 128;
+const ANIM_FRAME_DELAY = 100;
 const ANIM_SIZE = 64;
 
 const COMRADE_BASE_URL =
@@ -213,7 +213,6 @@ async function buildAnimatedGif(charBuffer, rightToLeft) {
       .resize(DEFAULT_SIZE, DEFAULT_SIZE, { kernel: sharp.kernel.nearest })
       .raw()
       .toBuffer();
-    upscaledFrames.push(upscaled);
     upscaledFrames.push(upscaled);
   }
   const delays = new Array(upscaledFrames.length).fill(ANIM_FRAME_DELAY);
