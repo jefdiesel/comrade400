@@ -40,16 +40,22 @@ let cityBg = null;
 let cityBgWidth = 0;
 
 async function loadComradeIndex() {
-  const treeUrl =
-    "https://api.github.com/repos/NoMoreLabs/Comrades/git/trees/800e0f88f385f091d226083d3fda0a47d2949247";
-  const resp = await fetch(treeUrl, {
+  const contentsUrl =
+    "https://api.github.com/repos/NoMoreLabs/Comrades/contents/art/pizza-comrades/pc_64px_noBG";
+  let page = 1;
+  let items = [];
+  // Contents API returns all items for a directory in one call
+  const resp = await fetch(contentsUrl, {
     headers: { "User-Agent": "comrade400-bot" },
   });
   const data = await resp.json();
-  for (const item of data.tree) {
-    const match = item.path.match(/#(\d+)\.\w+$/);
+  if (Array.isArray(data)) {
+    items = data;
+  }
+  for (const item of items) {
+    const match = item.name.match(/#(\d+)\.\w+$/);
     if (match) {
-      comradeIndex.set(parseInt(match[1]), item.path);
+      comradeIndex.set(parseInt(match[1]), item.name);
     }
   }
   console.log(`Comrade index loaded: ${comradeIndex.size} items`);
@@ -355,7 +361,8 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
-      await interaction.editReply(`Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
       return;
     }
 
@@ -364,7 +371,8 @@ client.on("interactionCreate", async (interaction) => {
     try {
       const buffer = await fetchComrade(itemNumber);
       if (!buffer) {
-        await interaction.editReply(`Failed to download Comrade #${itemNumber}.`);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
         return;
       }
 
@@ -381,7 +389,8 @@ client.on("interactionCreate", async (interaction) => {
       });
     } catch (err) {
       console.error("Animate failed:", err.message);
-      await interaction.editReply("Failed to create animation.");
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
     }
     return;
   }
