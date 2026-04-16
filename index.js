@@ -49,6 +49,7 @@ let cityBg = null;
 let cityBgWidth = 0;
 let cityBgBlur = null;
 let cityBgBlurWidth = 0;
+let nyanBuffer = null;
 
 async function loadComradeIndex() {
   // Resolve the latest tree SHA for the target directory via the Git Trees API (recursive)
@@ -169,6 +170,9 @@ async function loadCityBackground() {
   cityBgBlurWidth = rawBlur.info.width;
   cityBgBlur = rawBlur.data;
   console.log(`City background (blur) loaded: ${cityBgBlurWidth}x${ANIM_SIZE}`);
+
+  nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
+  console.log("Nyan comrade loaded");
 }
 
 function cacheSet(key, buffer) {
@@ -467,6 +471,16 @@ client.once("ready", async () => {
       opt.setName("id").setDescription("Item number").setRequired(true)
     );
 
+  const nyanCommand = new SlashCommandBuilder()
+    .setName("nyan")
+    .setDescription("Nyan Comrade animation over Pepperonia City")
+    .addBooleanOption((opt) =>
+      opt
+        .setName("rightleft")
+        .setDescription("Scroll right-to-left instead of left-to-right")
+        .setRequired(false)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
@@ -474,6 +488,7 @@ client.once("ready", async () => {
       command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(),
       fastCommand.toJSON(), brawndorCommand.toJSON(),
       cdcCommand.toJSON(), cotdCommand.toJSON(), pizzacomradesCommand.toJSON(),
+      nyanCommand.toJSON(),
     ],
   });
   console.log("Registered all commands (guild)");
@@ -591,6 +606,26 @@ client.on("interactionCreate", async (interaction) => {
       console.error(`${interaction.commandName} failed:`, err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+    }
+    return;
+  }
+
+  // Slash command: /nyan
+  if (interaction.isChatInputCommand() && interaction.commandName === "nyan") {
+    await interaction.deferReply();
+    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    try {
+      const gif = await buildAnimatedGif(nyanBuffer, rightToLeft);
+      const direction = rightToLeft ? "→" : "←";
+      const file = new AttachmentBuilder(gif, { name: "nyan_comrade.gif" });
+      await interaction.editReply({
+        content: `**Nyan Comrade** ${direction}`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("Nyan failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
     }
     return;
   }
