@@ -822,12 +822,37 @@ client.once("ready", async () => {
         )
     );
 
+  const bgCommand = new SlashCommandBuilder()
+    .setName("bg")
+    .setDescription("Show a scrolling background animation")
+    .addStringOption((opt) =>
+      opt
+        .setName("background")
+        .setDescription("Choose a background")
+        .setRequired(true)
+        .addChoices(
+          { name: "Pepperonia City", value: "pepperonia" },
+          { name: "Pepperonia City (Blur)", value: "pepperonia_blur" },
+          { name: "Night Mode", value: "night" },
+          { name: "Drain Plains 1", value: "drain_plains_1" },
+          { name: "Drain Plains 2", value: "drain_plains_2" },
+          { name: "Block City", value: "block_city" },
+          { name: "Beach Club", value: "beach_club" }
+        )
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("rightleft")
+        .setDescription("Scroll right-to-left instead of left-to-right")
+        .setRequired(false)
+    );
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
-      nyanCommand.toJSON(),
+      nyanCommand.toJSON(), bgCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1110,6 +1135,40 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Nyan failed:", err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
+    }
+    return;
+  }
+
+  // Slash command: /bg
+  if (interaction.isChatInputCommand() && interaction.commandName === "bg") {
+    await interaction.deferReply();
+    const bgChoice = interaction.options.getString("background");
+    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+
+    let bg, bgW, bgName;
+    if (bgChoice === "pepperonia_blur") {
+      bg = cityBgBlur; bgW = cityBgBlurWidth; bgName = "Pepperonia City (Blur)";
+    } else if (bgChoice === "night") {
+      bg = cityBgNight; bgW = cityBgNightWidth; bgName = "Night Mode";
+    } else if (cdcBackgrounds[bgChoice]) {
+      const entry = cdcBackgrounds[bgChoice];
+      bg = entry.data; bgW = entry.width; bgName = entry.label;
+    } else {
+      bg = cityBg; bgW = cityBgWidth; bgName = "Pepperonia City";
+    }
+
+    try {
+      const gif = await buildBgGif(rightToLeft, bg, bgW);
+      const direction = rightToLeft ? "→" : "←";
+      const file = new AttachmentBuilder(gif, { name: "background.gif" });
+      await interaction.editReply({
+        content: `**${bgName}** ${direction}`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("BG failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to create background animation.", ephemeral: true });
     }
     return;
   }
