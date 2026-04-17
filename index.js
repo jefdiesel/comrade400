@@ -29,16 +29,29 @@ const ANIM_FRAME_DELAY = 90;
 const ANIM_SIZE = 64;
 const MEME_MAX_CHARS = 20;
 
-// Load Pizzascript font as base64 for SVG embedding
-const pizzaFontB64 = fs.readFileSync(path.join(__dirname, "Pizzascript-Sneps.otf")).toString("base64");
+// Register Pizzascript font with fontconfig so librsvg can find it
+const fontDir = path.join(__dirname, "fonts");
+if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir);
+const fontDest = path.join(fontDir, "Pizzascript-Sneps.otf");
+if (!fs.existsSync(fontDest)) fs.copyFileSync(path.join(__dirname, "Pizzascript-Sneps.otf"), fontDest);
+// Point fontconfig to our fonts directory
+process.env.FONTCONFIG_PATH = process.env.FONTCONFIG_PATH || "";
+process.env.FONTCONFIG_FILE = path.join(fontDir, "fonts.conf");
+// Write a minimal fontconfig that includes our font directory
+fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${fontDir}</dir>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+</fontconfig>`);
 
 // Generate a 400x400 transparent SVG overlay with meme text (top and/or bottom)
 function buildMemeOverlaySvg(topText, bottomText) {
   const size = DEFAULT_SIZE;
-  const fontSize = 36;
-  const strokeWidth = 4;
-  const topY = 45;
-  const bottomY = size - 18;
+  const fontSize = 80;
+  const strokeWidth = 6;
+  const topY = 75;
+  const bottomY = size - 25;
 
   let textElements = "";
   if (topText) {
@@ -51,12 +64,6 @@ function buildMemeOverlaySvg(topText, bottomText) {
   }
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-  <defs><style>
-    @font-face {
-      font-family: 'Pizzascript';
-      src: url('data:font/otf;base64,${pizzaFontB64}') format('opentype');
-    }
-  </style></defs>
   ${textElements}
 </svg>`);
 }
