@@ -392,85 +392,56 @@ const client = new Client({
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
-  // Register slash command
-  const command = new SlashCommandBuilder()
-    .setName("animate")
-    .setDescription(
-      "Animate a Pizza Comrade over the Pepperonia City skyline"
+  // Register slash commands
+  const pizzaCommand = new SlashCommandBuilder()
+    .setName("pizza")
+    .setDescription("Pizza Comrades — display or animate")
+    .addSubcommand((sub) =>
+      sub
+        .setName("display")
+        .setDescription("Display a Pizza Comrade at 400x400")
+        .addIntegerOption((opt) =>
+          opt.setName("id").setDescription("Item number").setRequired(true)
+        )
     )
-    .addStringOption((opt) =>
-      opt
-        .setName("comrade")
-        .setDescription("Search by name or item number")
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addBooleanOption((opt) =>
-      opt
-        .setName("rightleft")
-        .setDescription("Scroll right-to-left instead of left-to-right")
-        .setRequired(false)
-    );
-
-  const bgCommand = new SlashCommandBuilder()
-    .setName("bg")
-    .setDescription("Show the scrolling Pepperonia City skyline")
-    .addBooleanOption((opt) =>
-      opt
-        .setName("rightleft")
-        .setDescription("Scroll right-to-left instead of left-to-right")
-        .setRequired(false)
-    );
-
-  const blurCommand = new SlashCommandBuilder()
-    .setName("blur")
-    .setDescription("Animate a Pizza Comrade over the blurred Pepperonia City skyline")
-    .addStringOption((opt) =>
-      opt
-        .setName("comrade")
-        .setDescription("Search by name or item number")
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addBooleanOption((opt) =>
-      opt
-        .setName("rightleft")
-        .setDescription("Scroll right-to-left instead of left-to-right")
-        .setRequired(false)
-    );
-
-  const fastCommand = new SlashCommandBuilder()
-    .setName("fast")
-    .setDescription("Animate a Pizza Comrade at 1.5x speed over Pepperonia City")
-    .addStringOption((opt) =>
-      opt
-        .setName("comrade")
-        .setDescription("Search by name or item number")
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addBooleanOption((opt) =>
-      opt
-        .setName("rightleft")
-        .setDescription("Scroll right-to-left instead of left-to-right")
-        .setRequired(false)
-    );
-
-  const brawndorCommand = new SlashCommandBuilder()
-    .setName("brawndor_speed")
-    .setDescription("Animate a Pizza Comrade at 2.222x speed over Pepperonia City")
-    .addStringOption((opt) =>
-      opt
-        .setName("comrade")
-        .setDescription("Search by name or item number")
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addBooleanOption((opt) =>
-      opt
-        .setName("rightleft")
-        .setDescription("Scroll right-to-left instead of left-to-right")
-        .setRequired(false)
+    .addSubcommand((sub) =>
+      sub
+        .setName("animate")
+        .setDescription("Animate a Pizza Comrade over a scrolling background")
+        .addStringOption((opt) =>
+          opt
+            .setName("comrade")
+            .setDescription("Search by name or item number")
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("background")
+            .setDescription("Choose a background")
+            .setRequired(false)
+            .addChoices(
+              { name: "Pepperonia City", value: "pepperonia" },
+              { name: "Pepperonia City (Blur)", value: "pepperonia_blur" }
+            )
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("speed")
+            .setDescription("Animation speed")
+            .setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Fast (1.5x)", value: "fast" },
+              { name: "Brawndor (2.2x)", value: "brawndor" }
+            )
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName("rightleft")
+            .setDescription("Scroll right-to-left instead of left-to-right")
+            .setRequired(false)
+        )
     );
 
   const cdcCommand = new SlashCommandBuilder()
@@ -529,13 +500,6 @@ client.once("ready", async () => {
       opt.setName("id").setDescription("Item number").setRequired(true)
     );
 
-  const pizzacomradesCommand = new SlashCommandBuilder()
-    .setName("pizzacomrades")
-    .setDescription("Display a Pizza Comrade at 400x400")
-    .addIntegerOption((opt) =>
-      opt.setName("id").setDescription("Item number").setRequired(true)
-    );
-
   const nyanCommand = new SlashCommandBuilder()
     .setName("nyan")
     .setDescription("Nyan Comrade animation over Pepperonia City")
@@ -550,9 +514,7 @@ client.once("ready", async () => {
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
-      command.toJSON(), bgCommand.toJSON(), blurCommand.toJSON(),
-      fastCommand.toJSON(), brawndorCommand.toJSON(),
-      cdcCommand.toJSON(), cotdCommand.toJSON(), pizzacomradesCommand.toJSON(),
+      pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(),
     ],
   });
@@ -596,13 +558,11 @@ client.on("messageCreate", async (message) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  // Autocomplete: /animate or /blur comrade
-  if (interaction.isAutocomplete() && (interaction.commandName === "animate" || interaction.commandName === "blur" || interaction.commandName === "fast" || interaction.commandName === "brawndor_speed")) {
+  // Autocomplete: /pizza animate comrade
+  if (interaction.isAutocomplete() && interaction.commandName === "pizza") {
     const query = interaction.options.getFocused().toLowerCase().trim();
-    const results = [];
 
     if (!query) {
-      // Show some notable named characters when empty
       const featured = [];
       for (const [num, filename] of comradeIndex) {
         const name = filename.replace(/\.\w+$/, "");
@@ -615,7 +575,6 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // Exact name starts-with first, then includes, then number match
     const startsWith = [];
     const includes = [];
     const numMatch = [];
@@ -694,32 +653,104 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // Slash command: /cotd, /pizzacomrades — display collection items
-  if (interaction.isChatInputCommand() && ["cotd", "pizzacomrades"].includes(interaction.commandName)) {
+  // Slash command: /pizza (subcommands: display, animate)
+  if (interaction.isChatInputCommand() && interaction.commandName === "pizza") {
+    await interaction.deferReply();
+    const subcommand = interaction.options.getSubcommand();
+
+    if (subcommand === "display") {
+      const id = interaction.options.getInteger("id");
+      const buffer = await fetchFromIndex(pcIndex, PC_BASE_URL, id);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Pizza Comrade #${id} not found.`, ephemeral: true });
+        return;
+      }
+      try {
+        const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        const file = new AttachmentBuilder(resized, { name: `pizza_${id}.png` });
+        await interaction.editReply({ content: `**Pizza Comrade #${id}**`, files: [file] });
+      } catch (err) {
+        console.error("Pizza display failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+      }
+    } else if (subcommand === "animate") {
+      const input = interaction.options.getString("comrade")?.trim() ?? "";
+      const bgChoice = interaction.options.getString("background") ?? "pepperonia";
+      const speedChoice = interaction.options.getString("speed") ?? "normal";
+      const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+
+      let itemNumber = parseInt(input);
+      if (isNaN(itemNumber)) {
+        const lower = input.toLowerCase();
+        for (const [num, filename] of comradeIndex) {
+          const name = filename.replace(/\.\w+$/, "").toLowerCase();
+          if (name.includes(lower)) {
+            itemNumber = num;
+            break;
+          }
+        }
+      }
+
+      if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
+        return;
+      }
+
+      const comradeName = comradeIndex.get(itemNumber);
+
+      try {
+        const buffer = await fetchComrade(itemNumber);
+        if (!buffer) {
+          await interaction.deleteReply();
+          await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
+          return;
+        }
+
+        const bg = bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
+        const bgW = bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
+        const frameDelay = speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
+        const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
+        const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
+
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay);
+        const direction = rightToLeft ? "→" : "←";
+        const label = comradeName.replace(/\.\w+$/, "");
+        const file = new AttachmentBuilder(gif, {
+          name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}.gif`,
+        });
+
+        await interaction.editReply({
+          content: `**${label}** ${direction}${bgLabel}${speedLabel}`,
+          files: [file],
+        });
+      } catch (err) {
+        console.error("Pizza animate failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
+      }
+    }
+    return;
+  }
+
+  // Slash command: /cotd
+  if (interaction.isChatInputCommand() && interaction.commandName === "cotd") {
     await interaction.deferReply();
     const id = interaction.options.getInteger("id");
-
-    let buffer, label;
-    if (interaction.commandName === "cotd") {
-      buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
-      label = `Comrade of the Dead #${id}`;
-    } else {
-      buffer = await fetchFromIndex(pcIndex, PC_BASE_URL, id);
-      label = `Pizza Comrade #${id}`;
-    }
-
+    const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
     if (!buffer) {
       await interaction.deleteReply();
-      await interaction.followUp({ content: `#${id} not found in this collection.`, ephemeral: true });
+      await interaction.followUp({ content: `Comrade of the Dead #${id} not found.`, ephemeral: true });
       return;
     }
-
     try {
       const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
-      const file = new AttachmentBuilder(resized, { name: `${interaction.commandName}_${id}.png` });
-      await interaction.editReply({ content: `**${label}**`, files: [file] });
+      const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
+      await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
     } catch (err) {
-      console.error(`${interaction.commandName} failed:`, err.message);
+      console.error("COTD failed:", err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
     }
@@ -740,249 +771,6 @@ client.on("interactionCreate", async (interaction) => {
       });
     } catch (err) {
       console.error("Nyan failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
-    }
-    return;
-  }
-
-  // Slash command: /bg
-  if (interaction.isChatInputCommand() && interaction.commandName === "bg") {
-    await interaction.deferReply();
-    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
-    try {
-      const gif = await buildBgGif(rightToLeft);
-      const file = new AttachmentBuilder(gif, { name: "pepperonia_city.gif" });
-      const direction = rightToLeft ? "→" : "←";
-      await interaction.editReply({
-        content: `**Pepperonia City** ${direction}`,
-        files: [file],
-      });
-    } catch (err) {
-      console.error("BG failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to create background animation.", ephemeral: true });
-    }
-    return;
-  }
-
-  // Slash command: /blur
-  if (interaction.isChatInputCommand() && interaction.commandName === "blur") {
-    await interaction.deferReply();
-
-    const input = interaction.options.getString("comrade")?.trim() ?? "";
-    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
-    console.log(`/blur input: "${input}"`);
-
-    let itemNumber = parseInt(input);
-    if (isNaN(itemNumber)) {
-      const lower = input.toLowerCase();
-      for (const [num, filename] of comradeIndex) {
-        const name = filename.replace(/\.\w+$/, "").toLowerCase();
-        if (name.includes(lower)) {
-          itemNumber = num;
-          break;
-        }
-      }
-    }
-
-    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
-      return;
-    }
-
-    const comradeName = comradeIndex.get(itemNumber);
-
-    try {
-      const buffer = await fetchComrade(itemNumber);
-      if (!buffer) {
-        await interaction.deleteReply();
-        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
-        return;
-      }
-
-      const gif = await buildAnimatedGif(buffer, rightToLeft, cityBgBlur, cityBgBlurWidth);
-      const direction = rightToLeft ? "→" : "←";
-      const label = comradeName.replace(/\.\w+$/, "");
-      const file = new AttachmentBuilder(gif, {
-        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}_blur.gif`,
-      });
-
-      await interaction.editReply({
-        content: `**${label}** ${direction}`,
-        files: [file],
-      });
-    } catch (err) {
-      console.error("Blur failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
-    }
-    return;
-  }
-
-  // Slash command: /fast (1.5x speed animate)
-  if (interaction.isChatInputCommand() && interaction.commandName === "fast") {
-    await interaction.deferReply();
-
-    const input = interaction.options.getString("comrade")?.trim() ?? "";
-    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
-    console.log(`/fast input: "${input}"`);
-
-    let itemNumber = parseInt(input);
-    if (isNaN(itemNumber)) {
-      const lower = input.toLowerCase();
-      for (const [num, filename] of comradeIndex) {
-        const name = filename.replace(/\.\w+$/, "").toLowerCase();
-        if (name.includes(lower)) {
-          itemNumber = num;
-          break;
-        }
-      }
-    }
-
-    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
-      return;
-    }
-
-    const comradeName = comradeIndex.get(itemNumber);
-
-    try {
-      const buffer = await fetchComrade(itemNumber);
-      if (!buffer) {
-        await interaction.deleteReply();
-        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
-        return;
-      }
-
-      const gif = await buildAnimatedGif(buffer, rightToLeft, cityBg, cityBgWidth, 60);
-      const direction = rightToLeft ? "→" : "←";
-      const label = comradeName.replace(/\.\w+$/, "");
-      const file = new AttachmentBuilder(gif, {
-        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}_fast.gif`,
-      });
-
-      await interaction.editReply({
-        content: `**${label}** ${direction} ⚡`,
-        files: [file],
-      });
-    } catch (err) {
-      console.error("Fast failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
-    }
-    return;
-  }
-
-  // Slash command: /brawndor_speed (2.222x speed animate)
-  if (interaction.isChatInputCommand() && interaction.commandName === "brawndor_speed") {
-    await interaction.deferReply();
-
-    const input = interaction.options.getString("comrade")?.trim() ?? "";
-    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
-    console.log(`/brawndor_speed input: "${input}"`);
-
-    let itemNumber = parseInt(input);
-    if (isNaN(itemNumber)) {
-      const lower = input.toLowerCase();
-      for (const [num, filename] of comradeIndex) {
-        const name = filename.replace(/\.\w+$/, "").toLowerCase();
-        if (name.includes(lower)) {
-          itemNumber = num;
-          break;
-        }
-      }
-    }
-
-    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
-      return;
-    }
-
-    const comradeName = comradeIndex.get(itemNumber);
-
-    try {
-      const buffer = await fetchComrade(itemNumber);
-      if (!buffer) {
-        await interaction.deleteReply();
-        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
-        return;
-      }
-
-      const gif = await buildAnimatedGif(buffer, rightToLeft, cityBg, cityBgWidth, 40);
-      const direction = rightToLeft ? "→" : "←";
-      const label = comradeName.replace(/\.\w+$/, "");
-      const file = new AttachmentBuilder(gif, {
-        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}_brawndor.gif`,
-      });
-
-      await interaction.editReply({
-        content: `**${label}** ${direction} 🔥`,
-        files: [file],
-      });
-    } catch (err) {
-      console.error("Brawndor speed failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
-    }
-    return;
-  }
-
-  // Slash command: /animate
-  if (interaction.isChatInputCommand() && interaction.commandName === "animate") {
-    await interaction.deferReply();
-
-    const input = interaction.options.getString("comrade")?.trim() ?? "";
-    const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
-    console.log(`/animate input: "${input}"`);
-
-    // Resolve input: could be a number from autocomplete or a typed name
-    let itemNumber = parseInt(input);
-    if (isNaN(itemNumber)) {
-      // Search by name
-      const lower = input.toLowerCase();
-      for (const [num, filename] of comradeIndex) {
-        const name = filename.replace(/\.\w+$/, "").toLowerCase();
-        if (name.includes(lower)) {
-          itemNumber = num;
-          console.log(`Matched "${input}" -> #${num} (${filename})`);
-          break;
-        }
-      }
-    }
-
-    if (isNaN(itemNumber) || !comradeIndex.has(itemNumber)) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `Comrade "${input}" not found. Try typing a name or number and pick from the dropdown.`, ephemeral: true });
-      return;
-    }
-
-    const comradeName = comradeIndex.get(itemNumber);
-
-    try {
-      const buffer = await fetchComrade(itemNumber);
-      if (!buffer) {
-        await interaction.deleteReply();
-        await interaction.followUp({ content: `Failed to download Comrade #${itemNumber}.`, ephemeral: true });
-        return;
-      }
-
-      const gif = await buildAnimatedGif(buffer, rightToLeft);
-      const direction = rightToLeft ? "→" : "←";
-      const label = comradeName.replace(/\.\w+$/, "");
-      const file = new AttachmentBuilder(gif, {
-        name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}.gif`,
-      });
-
-      await interaction.editReply({
-        content: `**${label}** ${direction}`,
-        files: [file],
-      });
-    } catch (err) {
-      console.error("Animate failed:", err.message);
       await interaction.deleteReply();
       await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
     }
