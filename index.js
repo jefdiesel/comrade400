@@ -53,8 +53,7 @@ let cityBgWidth = 0;
 let cityBgBlur = null;
 let cityBgBlurWidth = 0;
 let nyanBuffer = null;
-let yonderBg = null;
-let yonderBgWidth = 0;
+
 
 // CDC animation backgrounds
 const cdcBackgrounds = {};
@@ -188,14 +187,6 @@ async function loadCityBackground() {
   nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
   console.log("Nyan comrade loaded");
 
-  const rawYonder = await sharp(path.join(__dirname, "YONDER_Background_2.png"))
-    .resize({ height: ANIM_SIZE, kernel: sharp.kernel.nearest })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  yonderBgWidth = rawYonder.info.width;
-  yonderBg = rawYonder.data;
-  console.log(`Yonder background loaded: ${yonderBgWidth}x${ANIM_SIZE}`);
 
   // Load CDC backgrounds
   for (const [key, { file, label }] of Object.entries(CDC_BG_FILES)) {
@@ -433,8 +424,7 @@ client.once("ready", async () => {
             .setRequired(false)
             .addChoices(
               { name: "Pepperonia City", value: "pepperonia" },
-              { name: "Pepperonia City (Blur)", value: "pepperonia_blur" },
-              { name: "Yonder", value: "yonder" }
+              { name: "Pepperonia City (Blur)", value: "pepperonia_blur" }
             )
         )
         .addStringOption((opt) =>
@@ -721,11 +711,11 @@ client.on("interactionCreate", async (interaction) => {
           return;
         }
 
-        const bg = bgChoice === "yonder" ? yonderBg : bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
-        const bgW = bgChoice === "yonder" ? yonderBgWidth : bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
+        const bg = bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
+        const bgW = bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
         const frameDelay = speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
         const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
-        const bgLabel = bgChoice === "yonder" ? " — Yonder" : bgChoice === "pepperonia_blur" ? " (Blur)" : "";
+        const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
         const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay);
         const direction = rightToLeft ? "→" : "←";
