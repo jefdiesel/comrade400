@@ -393,6 +393,18 @@ function cacheSet(key, buffer) {
   setTimeout(() => imageCache.delete(key), 10 * 60 * 1000);
 }
 
+function makeShareRow(label) {
+  const tweetText = encodeURIComponent(`${label}\n\nMade with Comrade400`);
+  const url = `https://twitter.com/intent/tweet?text=${tweetText}`;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel("Share on Twitter")
+      .setStyle(ButtonStyle.Link)
+      .setURL(url)
+      .setEmoji("🐦")
+  );
+}
+
 function makeButtons(sourceId, currentSize) {
   const row = new ActionRowBuilder();
   for (const size of SIZE_OPTIONS) {
@@ -902,7 +914,8 @@ client.on("interactionCreate", async (interaction) => {
         if (useGm) resized = await applyGmOverlay(resized);
         if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
         const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
-        await interaction.editReply({ content: `**Call Data Comrade #${id}**`, files: [file] });
+        const label = `Call Data Comrade #${id}`;
+        await interaction.editReply({ content: `**${label}**`, files: [file], components: [makeShareRow(label)] });
       } catch (err) {
         console.error("CDC display failed:", err.message);
         await interaction.deleteReply();
@@ -927,9 +940,11 @@ client.on("interactionCreate", async (interaction) => {
         const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom, textStyle);
         const direction = rightToLeft ? "→" : "←";
         const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
+        const label = `Call Data Comrade #${id} ${direction} — ${bg.label}${speedLabel}`;
         await interaction.editReply({
-          content: `**Call Data Comrade #${id}** ${direction} — ${bg.label}${speedLabel}`,
+          content: `**${label}**`,
           files: [file],
+          components: [makeShareRow(label)],
         });
       } catch (err) {
         console.error("CDC animate failed:", err.message);
@@ -963,7 +978,8 @@ client.on("interactionCreate", async (interaction) => {
         if (useGm) resized = await applyGmOverlay(resized);
         if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
         const file = new AttachmentBuilder(resized, { name: `pizza_${id}.png` });
-        await interaction.editReply({ content: `**Pizza Comrade #${id}**`, files: [file] });
+        const label = `Pizza Comrade #${id}`;
+        await interaction.editReply({ content: `**${label}**`, files: [file], components: [makeShareRow(label)] });
       } catch (err) {
         console.error("Pizza display failed:", err.message);
         await interaction.deleteReply();
@@ -1016,9 +1032,11 @@ client.on("interactionCreate", async (interaction) => {
           name: `${label.replace(/[^a-zA-Z0-9]/g, "_")}.gif`,
         });
 
+        const shareLabel = `${label} ${direction}${bgLabel}${speedLabel}`;
         await interaction.editReply({
-          content: `**${label}** ${direction}${bgLabel}${speedLabel}`,
+          content: `**${shareLabel}**`,
           files: [file],
+          components: [makeShareRow(shareLabel)],
         });
       } catch (err) {
         console.error("Pizza animate failed:", err.message);
@@ -1047,7 +1065,8 @@ client.on("interactionCreate", async (interaction) => {
       if (useGm) resized = await applyGmOverlay(resized);
       if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
       const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
-      await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
+      const label = `Comrade of the Dead #${id}`;
+      await interaction.editReply({ content: `**${label}**`, files: [file], components: [makeShareRow(label)] });
     } catch (err) {
       console.error("COTD failed:", err.message);
       await interaction.deleteReply();
@@ -1064,9 +1083,11 @@ client.on("interactionCreate", async (interaction) => {
       const gif = await buildAnimatedGif(nyanBuffer, rightToLeft);
       const direction = rightToLeft ? "→" : "←";
       const file = new AttachmentBuilder(gif, { name: "nyan_comrade.gif" });
+      const label = `Nyan Comrade ${direction}`;
       await interaction.editReply({
-        content: `**Nyan Comrade** ${direction}`,
+        content: `**${label}**`,
         files: [file],
+        components: [makeShareRow(label)],
       });
     } catch (err) {
       console.error("Nyan failed:", err.message);
