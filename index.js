@@ -46,21 +46,31 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 </fontconfig>`);
 
 // Generate a 400x400 transparent SVG overlay with meme text (top and/or bottom)
+// Pizzascript: ~44px per char at font-size 100
+const PIZZA_CHAR_WIDTH = 44;
+const MEME_MAX_FONT = 80;
+const MEME_MIN_FONT = 30;
+
+function memeFont(text) {
+  const targetWidth = DEFAULT_SIZE * 0.9;
+  const sz = Math.round((targetWidth / (text.length * PIZZA_CHAR_WIDTH)) * 100);
+  return Math.max(MEME_MIN_FONT, Math.min(MEME_MAX_FONT, sz));
+}
+
 function buildMemeOverlaySvg(topText, bottomText) {
   const size = DEFAULT_SIZE;
-  const fontSize = 80;
-  const strokeWidth = 6;
-  const topY = 75;
-  const bottomY = size - 25;
-
   let textElements = "";
   if (topText) {
+    const fs = memeFont(topText);
+    const sw = Math.max(3, Math.round(fs / 12));
     textElements += `
-      <text x="${size / 2}" y="${topY}" text-anchor="middle" font-family="Pizzascript" font-size="${fontSize}" fill="white" stroke="black" stroke-width="${strokeWidth}" paint-order="stroke">${escapeXml(topText)}</text>`;
+      <text x="${size / 2}" y="${Math.round(fs * 0.85)}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
   }
   if (bottomText) {
+    const fs = memeFont(bottomText);
+    const sw = Math.max(3, Math.round(fs / 12));
     textElements += `
-      <text x="${size / 2}" y="${bottomY}" text-anchor="middle" font-family="Pizzascript" font-size="${fontSize}" fill="white" stroke="black" stroke-width="${strokeWidth}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
+      <text x="${size / 2}" y="${size - Math.round(fs * 0.25)}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
   }
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
