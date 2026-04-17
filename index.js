@@ -398,7 +398,7 @@ function makeShareRow(label) {
   const url = `https://twitter.com/intent/tweet?text=${tweetText}`;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel("Share on Twitter")
+      .setLabel("Share on X (save image first)")
       .setStyle(ButtonStyle.Link)
       .setURL(url)
       .setEmoji("🐦")
