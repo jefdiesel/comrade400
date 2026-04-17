@@ -178,6 +178,8 @@ let cityBg = null;
 let cityBgWidth = 0;
 let cityBgBlur = null;
 let cityBgBlurWidth = 0;
+let cityBgNight = null;
+let cityBgNightWidth = 0;
 let nyanBuffer = null;
 let gmOverlay400 = null; // 400x400 RGBA raw buffer with GM bubble positioned
 
@@ -309,6 +311,16 @@ async function loadCityBackground() {
   cityBgBlurWidth = rawBlur.info.width;
   cityBgBlur = rawBlur.data;
   console.log(`City background (blur) loaded: ${cityBgBlurWidth}x${ANIM_SIZE}`);
+
+  // Night mode: darken blur bg by 85%
+  cityBgNight = Buffer.from(cityBgBlur);
+  cityBgNightWidth = cityBgBlurWidth;
+  for (let i = 0; i < cityBgNight.length; i += 4) {
+    cityBgNight[i] = Math.round(cityBgNight[i] * 0.15);
+    cityBgNight[i + 1] = Math.round(cityBgNight[i + 1] * 0.15);
+    cityBgNight[i + 2] = Math.round(cityBgNight[i + 2] * 0.15);
+  }
+  console.log(`City background (night) loaded: ${cityBgNightWidth}x${ANIM_SIZE}`);
 
   nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
   console.log("Nyan comrade loaded");
@@ -648,7 +660,8 @@ client.once("ready", async () => {
             .setRequired(false)
             .addChoices(
               { name: "Pepperonia City", value: "pepperonia" },
-              { name: "Pepperonia City (Blur)", value: "pepperonia_blur" }
+              { name: "Pepperonia City (Blur)", value: "pepperonia_blur" },
+              { name: "Night Mode", value: "night" }
             )
         )
         .addStringOption((opt) =>
@@ -1022,11 +1035,11 @@ client.on("interactionCreate", async (interaction) => {
           return;
         }
 
-        const bg = bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
-        const bgW = bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
+        const bg = bgChoice === "night" ? cityBgNight : bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
+        const bgW = bgChoice === "night" ? cityBgNightWidth : bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
         const frameDelay = speedChoice === "cryptoph03n1x" ? 20 : speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
-        const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
+        const bgLabel = bgChoice === "night" ? " (Night)" : bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
         const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom, textStyle);
         const direction = rightToLeft ? "→" : "←";
