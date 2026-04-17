@@ -830,7 +830,9 @@ client.once("ready", async () => {
       nyanCommand.toJSON(),
     ],
   });
-  console.log("Registered all commands (guild)");
+  // Clear any stale global commands
+  await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+  console.log("Registered all commands (guild), cleared global commands");
 });
 
 // Auto-resize on image upload
