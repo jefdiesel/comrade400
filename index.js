@@ -789,6 +789,24 @@ client.once("ready", async () => {
         .setName("rightleft")
         .setDescription("Scroll right-to-left instead of left-to-right")
         .setRequired(false)
+    )
+    .addBooleanOption((opt) =>
+      opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+    )
+    .addStringOption((opt) =>
+      opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+    )
+    .addStringOption((opt) =>
+      opt.setName("textstyle").setDescription("Meme text animation style").setRequired(false)
+        .addChoices(
+          { name: "Normal", value: "normal" },
+          { name: "Bounce", value: "bounce" },
+          { name: "Tapeworm", value: "tapeworm" },
+          { name: "Random", value: "random" }
+        )
     );
 
   const rest = new REST().setToken(TOKEN);
@@ -1061,8 +1079,12 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "nyan") {
     await interaction.deferReply();
     const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+    const useGm = interaction.options.getBoolean("gm") ?? false;
+    const memeTop = interaction.options.getString("top") ?? null;
+    const memeBottom = interaction.options.getString("bottom") ?? null;
+    const textStyle = interaction.options.getString("textstyle") ?? "normal";
     try {
-      const gif = await buildAnimatedGif(nyanBuffer, rightToLeft);
+      const gif = await buildAnimatedGif(nyanBuffer, rightToLeft, cityBg, cityBgWidth, ANIM_FRAME_DELAY, useGm, memeTop, memeBottom, textStyle);
       const direction = rightToLeft ? "→" : "←";
       const file = new AttachmentBuilder(gif, { name: "nyan_comrade.gif" });
       await interaction.editReply({
