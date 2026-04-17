@@ -46,14 +46,22 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 </fontconfig>`);
 
 // Meme text system: auto-scaling + per-character animation
-const PIZZA_CHAR_WIDTH = 44; // px per char at font-size 100
+const PIZZA_LETTER_W = 44; // px per letter at font-size 100 (slightly tight to avoid gaps)
+const PIZZA_SPACE_W = 20;  // px per space at font-size 100
 const MEME_MAX_FONT = 80;
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
+function memeTextWidth(text, fs) {
+  let w = 0;
+  for (const ch of text) w += (ch === " " ? PIZZA_SPACE_W : PIZZA_LETTER_W);
+  return w * fs / 100;
+}
+
 function memeFont(text) {
   const targetWidth = DEFAULT_SIZE * 0.9;
-  const sz = Math.round((targetWidth / (text.length * PIZZA_CHAR_WIDTH)) * 100);
+  const w100 = memeTextWidth(text, 100);
+  const sz = Math.round((targetWidth / w100) * 100);
   return Math.max(MEME_MIN_FONT, Math.min(MEME_MAX_FONT, sz));
 }
 
@@ -88,20 +96,26 @@ function memeFrameCount(style) {
 function renderMemeLine(text, baseY, phase, style) {
   const fs = memeFont(text);
   const sw = Math.max(3, Math.round(fs / 12));
-  const charW = fs * PIZZA_CHAR_WIDTH / 100;
-  const totalW = text.length * charW;
+  const letterW = PIZZA_LETTER_W * fs / 100;
+  const spaceW = PIZZA_SPACE_W * fs / 100;
+  const totalW = memeTextWidth(text, fs);
   const startX = (DEFAULT_SIZE - totalW) / 2;
   const bounce = Math.round(MEME_BOUNCE_PX * fs / 50);
 
   let elements = "";
   let ci = 0;
+  let x = startX;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    const x = Math.round(startX + i * charW);
-    const yOff = ch !== " " ? getCharOffset(ci, phase, style, bounce) : 0;
-    const y = Math.round(baseY + yOff);
-    elements += `<text x="${x}" y="${y}" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(ch)}</text>`;
-    if (ch !== " ") ci++;
+    if (ch !== " ") {
+      const yOff = getCharOffset(ci, phase, style, bounce);
+      const y = Math.round(baseY + yOff);
+      elements += `<text x="${Math.round(x)}" y="${y}" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(ch)}</text>`;
+      x += letterW;
+      ci++;
+    } else {
+      x += spaceW;
+    }
   }
   return elements;
 }
