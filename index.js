@@ -53,7 +53,7 @@ let cityBgWidth = 0;
 let cityBgBlur = null;
 let cityBgBlurWidth = 0;
 let nyanBuffer = null;
-
+let gmOverlay400 = null; // 400x400 RGBA raw buffer with GM bubble positioned
 
 // CDC animation backgrounds
 const cdcBackgrounds = {};
@@ -187,6 +187,27 @@ async function loadCityBackground() {
   nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
   console.log("Nyan comrade loaded");
 
+  // Load GM bubble and create 400x400 overlay
+  const gmBubble = await sharp(path.join(__dirname, "gm_bubble.png"))
+    .resize(128, 104, { kernel: sharp.kernel.nearest })
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
+  // Create a 400x400 transparent canvas and place bubble at (255, 185)
+  const gmCanvas = Buffer.alloc(DEFAULT_SIZE * DEFAULT_SIZE * 4, 0);
+  const gmX = 255, gmY = 185, gmW = 128, gmH = 104;
+  for (let y = 0; y < gmH; y++) {
+    for (let x = 0; x < gmW; x++) {
+      const srcIdx = (y * gmW + x) * 4;
+      const dstIdx = ((gmY + y) * DEFAULT_SIZE + (gmX + x)) * 4;
+      gmCanvas[dstIdx] = gmBubble[srcIdx];
+      gmCanvas[dstIdx + 1] = gmBubble[srcIdx + 1];
+      gmCanvas[dstIdx + 2] = gmBubble[srcIdx + 2];
+      gmCanvas[dstIdx + 3] = gmBubble[srcIdx + 3];
+    }
+  }
+  gmOverlay400 = gmCanvas;
+  console.log("GM bubble overlay loaded (400x400)");
 
   // Load CDC backgrounds
   for (const [key, { file, label }] of Object.entries(CDC_BG_FILES)) {
@@ -198,6 +219,17 @@ async function loadCityBackground() {
     cdcBackgrounds[key] = { data: raw.data, width: raw.info.width, label };
     console.log(`CDC background loaded: ${label} (${raw.info.width}x${ANIM_SIZE})`);
   }
+}
+
+// Composite GM bubble onto a 400x400 PNG buffer
+async function applyGmOverlay(pngBuffer) {
+  const overlay = await sharp(gmOverlay400, {
+    raw: { width: DEFAULT_SIZE, height: DEFAULT_SIZE, channels: 4 },
+  }).png().toBuffer();
+  return sharp(pngBuffer)
+    .composite([{ input: overlay, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
 }
 
 function cacheSet(key, buffer) {
@@ -260,7 +292,7 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY) {
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false) {
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -323,6 +355,17 @@ async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = 
       .resize(DEFAULT_SIZE, DEFAULT_SIZE, { kernel: sharp.kernel.nearest })
       .raw()
       .toBuffer();
+    if (useGm && gmOverlay400) {
+      const sz = DEFAULT_SIZE * DEFAULT_SIZE * 4;
+      for (let i = 0; i < sz; i += 4) {
+        if (gmOverlay400[i + 3] > 0) {
+          upscaled[i] = gmOverlay400[i];
+          upscaled[i + 1] = gmOverlay400[i + 1];
+          upscaled[i + 2] = gmOverlay400[i + 2];
+          upscaled[i + 3] = gmOverlay400[i + 3];
+        }
+      }
+    }
     upscaledFrames.push(upscaled);
   }
   const delays = new Array(upscaledFrames.length).fill(frameDelay);
@@ -405,6 +448,9 @@ client.once("ready", async () => {
         .addIntegerOption((opt) =>
           opt.setName("id").setDescription("Item number").setRequired(true)
         )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
     )
     .addSubcommand((sub) =>
       sub
@@ -445,6 +491,9 @@ client.once("ready", async () => {
             .setDescription("Scroll right-to-left instead of left-to-right")
             .setRequired(false)
         )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
     );
 
   const cdcCommand = new SlashCommandBuilder()
@@ -456,6 +505,9 @@ client.once("ready", async () => {
         .setDescription("Display a Call Data Comrade at 400x400")
         .addIntegerOption((opt) =>
           opt.setName("id").setDescription("Item number").setRequired(true)
+        )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
         )
     )
     .addSubcommand((sub) =>
@@ -494,6 +546,9 @@ client.once("ready", async () => {
             .setDescription("Scroll right-to-left instead of left-to-right")
             .setRequired(false)
         )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
     );
 
   const cotdCommand = new SlashCommandBuilder()
@@ -501,6 +556,9 @@ client.once("ready", async () => {
     .setDescription("Display a Comrade of the Dead at 400x400")
     .addIntegerOption((opt) =>
       opt.setName("id").setDescription("Item number").setRequired(true)
+    )
+    .addBooleanOption((opt) =>
+      opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
     );
 
   const nyanCommand = new SlashCommandBuilder()
@@ -608,6 +666,8 @@ client.on("interactionCreate", async (interaction) => {
     const subcommand = interaction.options.getSubcommand();
     const id = interaction.options.getInteger("id");
 
+    const useGm = interaction.options.getBoolean("gm") ?? false;
+
     if (subcommand === "display") {
       const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
       if (!buffer) {
@@ -616,7 +676,8 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
       try {
-        const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        if (useGm) resized = await applyGmOverlay(resized);
         const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
         await interaction.editReply({ content: `**Call Data Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -640,7 +701,7 @@ client.on("interactionCreate", async (interaction) => {
       const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
 
       try {
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm);
         const direction = rightToLeft ? "→" : "←";
         const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
         await interaction.editReply({
@@ -661,6 +722,8 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.deferReply();
     const subcommand = interaction.options.getSubcommand();
 
+    const useGm = interaction.options.getBoolean("gm") ?? false;
+
     if (subcommand === "display") {
       const id = interaction.options.getInteger("id");
       const buffer = await fetchFromIndex(pcIndex, PC_BASE_URL, id);
@@ -670,7 +733,8 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
       try {
-        const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        if (useGm) resized = await applyGmOverlay(resized);
         const file = new AttachmentBuilder(resized, { name: `pizza_${id}.png` });
         await interaction.editReply({ content: `**Pizza Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -718,7 +782,7 @@ client.on("interactionCreate", async (interaction) => {
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
         const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm);
         const direction = rightToLeft ? "→" : "←";
         const label = comradeName.replace(/\.\w+$/, "");
         const file = new AttachmentBuilder(gif, {
@@ -742,6 +806,7 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "cotd") {
     await interaction.deferReply();
     const id = interaction.options.getInteger("id");
+    const useGm = interaction.options.getBoolean("gm") ?? false;
     const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
     if (!buffer) {
       await interaction.deleteReply();
@@ -749,7 +814,8 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
     try {
-      const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+      let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+      if (useGm) resized = await applyGmOverlay(resized);
       const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
       await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
     } catch (err) {
