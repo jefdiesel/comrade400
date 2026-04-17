@@ -51,6 +51,15 @@ let cityBgBlur = null;
 let cityBgBlurWidth = 0;
 let nyanBuffer = null;
 
+// CDC animation backgrounds
+const cdcBackgrounds = {};
+const CDC_BG_FILES = {
+  drain_plains_1: { file: "drain_plains.webp", label: "Drain Plains 1" },
+  drain_plains_2: { file: "DrainPlains_wide_04.webp", label: "Drain Plains 2" },
+  block_city: { file: "Block_City_wide_Glow.webp", label: "Block City" },
+  beach_club: { file: "beachcity.png", label: "Beach Club" },
+};
+
 async function loadComradeIndex() {
   // Resolve the latest tree SHA for the target directory via the Git Trees API (recursive)
   const headers = { "User-Agent": "comrade400-bot" };
@@ -173,6 +182,17 @@ async function loadCityBackground() {
 
   nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
   console.log("Nyan comrade loaded");
+
+  // Load CDC backgrounds
+  for (const [key, { file, label }] of Object.entries(CDC_BG_FILES)) {
+    const raw = await sharp(path.join(__dirname, file))
+      .resize({ height: ANIM_SIZE, kernel: sharp.kernel.nearest })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    cdcBackgrounds[key] = { data: raw.data, width: raw.info.width, label };
+    console.log(`CDC background loaded: ${label} (${raw.info.width}x${ANIM_SIZE})`);
+  }
 }
 
 function cacheSet(key, buffer) {
@@ -452,9 +472,51 @@ client.once("ready", async () => {
 
   const cdcCommand = new SlashCommandBuilder()
     .setName("cdc")
-    .setDescription("Display a Call Data Comrade at 400x400")
-    .addIntegerOption((opt) =>
-      opt.setName("id").setDescription("Item number").setRequired(true)
+    .setDescription("Call Data Comrades — display or animate")
+    .addSubcommand((sub) =>
+      sub
+        .setName("display")
+        .setDescription("Display a Call Data Comrade at 400x400")
+        .addIntegerOption((opt) =>
+          opt.setName("id").setDescription("Item number").setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("animate")
+        .setDescription("Animate a Call Data Comrade over a background")
+        .addIntegerOption((opt) =>
+          opt.setName("id").setDescription("Item number").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("background")
+            .setDescription("Choose a background")
+            .setRequired(true)
+            .addChoices(
+              { name: "Drain Plains 1", value: "drain_plains_1" },
+              { name: "Drain Plains 2", value: "drain_plains_2" },
+              { name: "Block City", value: "block_city" },
+              { name: "Beach Club", value: "beach_club" }
+            )
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("speed")
+            .setDescription("Animation speed")
+            .setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Fast (1.5x)", value: "fast" },
+              { name: "Brawndor (2.2x)", value: "brawndor" }
+            )
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName("rightleft")
+            .setDescription("Scroll right-to-left instead of left-to-right")
+            .setRequired(false)
+        )
     );
 
   const cotdCommand = new SlashCommandBuilder()
@@ -575,16 +637,62 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // Slash command: /cdc, /cotd, /pizzacomrades — display collection items
-  if (interaction.isChatInputCommand() && ["cdc", "cotd", "pizzacomrades"].includes(interaction.commandName)) {
+  // Slash command: /cdc (subcommands: display, animate)
+  if (interaction.isChatInputCommand() && interaction.commandName === "cdc") {
+    await interaction.deferReply();
+    const subcommand = interaction.options.getSubcommand();
+    const id = interaction.options.getInteger("id");
+
+    const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
+    if (!buffer) {
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `CDC #${id} not found.`, ephemeral: true });
+      return;
+    }
+
+    if (subcommand === "display") {
+      try {
+        const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
+        await interaction.editReply({ content: `**Call Data Comrade #${id}**`, files: [file] });
+      } catch (err) {
+        console.error("CDC display failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+      }
+    } else if (subcommand === "animate") {
+      const bgKey = interaction.options.getString("background");
+      const speedChoice = interaction.options.getString("speed") ?? "normal";
+      const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+      const bg = cdcBackgrounds[bgKey];
+
+      const frameDelay = speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
+      const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
+
+      try {
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay);
+        const direction = rightToLeft ? "→" : "←";
+        const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
+        await interaction.editReply({
+          content: `**Call Data Comrade #${id}** ${direction} — ${bg.label}${speedLabel}`,
+          files: [file],
+        });
+      } catch (err) {
+        console.error("CDC animate failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
+      }
+    }
+    return;
+  }
+
+  // Slash command: /cotd, /pizzacomrades — display collection items
+  if (interaction.isChatInputCommand() && ["cotd", "pizzacomrades"].includes(interaction.commandName)) {
     await interaction.deferReply();
     const id = interaction.options.getInteger("id");
 
     let buffer, label;
-    if (interaction.commandName === "cdc") {
-      buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
-      label = `Call Data Comrade #${id}`;
-    } else if (interaction.commandName === "cotd") {
+    if (interaction.commandName === "cotd") {
       buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
       label = `Comrade of the Dead #${id}`;
     } else {
