@@ -45,11 +45,11 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
   <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
 </fontconfig>`);
 
-// Generate a 400x400 transparent SVG overlay with meme text (top and/or bottom)
-// Pizzascript: ~44px per char at font-size 100
-const PIZZA_CHAR_WIDTH = 44;
+// Meme text system: auto-scaling + per-character animation
+const PIZZA_CHAR_WIDTH = 44; // px per char at font-size 100
 const MEME_MAX_FONT = 80;
 const MEME_MIN_FONT = 30;
+const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
 function memeFont(text) {
   const targetWidth = DEFAULT_SIZE * 0.9;
@@ -57,20 +57,77 @@ function memeFont(text) {
   return Math.max(MEME_MIN_FONT, Math.min(MEME_MAX_FONT, sz));
 }
 
-function buildMemeOverlaySvg(topText, bottomText) {
+function getCharOffset(charIndex, phase, style, bounceAmt) {
+  switch (style) {
+    case "bounce":
+      return (charIndex + phase) % 2 === 1 ? bounceAmt : 0;
+    case "tapeworm": {
+      const wavePos = (charIndex + phase) % 4;
+      if (wavePos === 1) return -bounceAmt;
+      if (wavePos === 3) return bounceAmt;
+      return 0;
+    }
+    case "random": {
+      const r = ((charIndex * 2654435761) >>> 0) % 100;
+      if (r < 25) return (phase + charIndex) % 2 === 0 ? -bounceAmt : 0;
+      if (r < 50) return (phase + charIndex) % 2 === 1 ? bounceAmt : 0;
+      return 0;
+    }
+    default:
+      return 0;
+  }
+}
+
+function memeFrameCount(style) {
+  if (style === "bounce" || style === "random") return 2;
+  if (style === "tapeworm") return 4;
+  return 1;
+}
+
+// Render a line of text as individual <text> elements with per-char Y offsets
+function renderMemeLine(text, baseY, phase, style) {
+  const fs = memeFont(text);
+  const sw = Math.max(3, Math.round(fs / 12));
+  const charW = fs * PIZZA_CHAR_WIDTH / 100;
+  const totalW = text.length * charW;
+  const startX = (DEFAULT_SIZE - totalW) / 2;
+  const bounce = Math.round(MEME_BOUNCE_PX * fs / 50);
+
+  let elements = "";
+  let ci = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const x = Math.round(startX + i * charW);
+    const yOff = ch !== " " ? getCharOffset(ci, phase, style, bounce) : 0;
+    const y = Math.round(baseY + yOff);
+    elements += `<text x="${x}" y="${y}" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(ch)}</text>`;
+    if (ch !== " ") ci++;
+  }
+  return elements;
+}
+
+function buildMemeOverlaySvg(topText, bottomText, phase = 0, style = "normal") {
   const size = DEFAULT_SIZE;
   let textElements = "";
   if (topText) {
     const fs = memeFont(topText);
-    const sw = Math.max(3, Math.round(fs / 12));
-    textElements += `
-      <text x="${size / 2}" y="${Math.round(fs * 0.85)}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
+    const baseY = Math.round(fs * 0.85);
+    if (style === "normal") {
+      const sw = Math.max(3, Math.round(fs / 12));
+      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
+    } else {
+      textElements += renderMemeLine(topText, baseY, phase, style);
+    }
   }
   if (bottomText) {
     const fs = memeFont(bottomText);
-    const sw = Math.max(3, Math.round(fs / 12));
-    textElements += `
-      <text x="${size / 2}" y="${size - Math.round(fs * 0.25)}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
+    const baseY = size - Math.round(fs * 0.25);
+    if (style === "normal") {
+      const sw = Math.max(3, Math.round(fs / 12));
+      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
+    } else {
+      textElements += renderMemeLine(bottomText, baseY, phase, style);
+    }
   }
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
@@ -287,19 +344,25 @@ async function applyGmOverlay(pngBuffer) {
     .toBuffer();
 }
 
-// Render meme text overlay as raw RGBA at 400x400
-async function renderMemeRaw(topText, bottomText) {
-  const svg = buildMemeOverlaySvg(topText, bottomText);
-  return sharp(svg)
-    .resize(DEFAULT_SIZE, DEFAULT_SIZE)
-    .ensureAlpha()
-    .raw()
-    .toBuffer();
+// Pre-render all meme animation phases as raw RGBA buffers
+async function renderMemePhases(topText, bottomText, style = "normal") {
+  const frames = memeFrameCount(style);
+  const phases = [];
+  for (let p = 0; p < frames; p++) {
+    const svg = buildMemeOverlaySvg(topText, bottomText, p, style);
+    const raw = await sharp(svg)
+      .resize(DEFAULT_SIZE, DEFAULT_SIZE)
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    phases.push(raw);
+  }
+  return phases;
 }
 
-// Apply meme text to a 400x400 PNG buffer
+// Apply meme text to a 400x400 PNG buffer (static, no animation)
 async function applyMemeOverlay(pngBuffer, topText, bottomText) {
-  const svg = buildMemeOverlaySvg(topText, bottomText);
+  const svg = buildMemeOverlaySvg(topText, bottomText, 0, "normal");
   const overlay = await sharp(svg).png().toBuffer();
   return sharp(pngBuffer)
     .composite([{ input: overlay, top: 0, left: 0 }])
@@ -367,9 +430,9 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false, memeTop = null, memeBottom = null) {
-  // Pre-render meme overlay as raw RGBA if needed
-  const memeRaw = (memeTop || memeBottom) ? await renderMemeRaw(memeTop, memeBottom) : null;
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false, memeTop = null, memeBottom = null, textStyle = "normal") {
+  // Pre-render meme overlay phases as raw RGBA if needed
+  const memePhases = (memeTop || memeBottom) ? await renderMemePhases(memeTop, memeBottom, textStyle) : null;
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -444,7 +507,12 @@ async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = 
         }
       }
     }
-    if (memeRaw) {
+    if (memePhases) {
+      // Cycle through text animation phases (e.g. every 8 frames for bounce)
+      const phaseCount = memePhases.length;
+      const framesPerPhase = Math.max(1, Math.floor(ANIM_FRAMES / (phaseCount * 8)));
+      const phase = Math.floor(f / framesPerPhase) % phaseCount;
+      const memeRaw = memePhases[phase];
       for (let i = 0; i < sz; i += 4) {
         const a = memeRaw[i + 3];
         if (a > 0) {
@@ -595,6 +663,15 @@ client.once("ready", async () => {
         .addStringOption((opt) =>
           opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
         )
+        .addStringOption((opt) =>
+          opt.setName("textstyle").setDescription("Meme text animation style").setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Bounce", value: "bounce" },
+              { name: "Tapeworm", value: "tapeworm" },
+              { name: "Random", value: "random" }
+            )
+        )
     );
 
   const cdcCommand = new SlashCommandBuilder()
@@ -661,6 +738,15 @@ client.once("ready", async () => {
         )
         .addStringOption((opt) =>
           opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("textstyle").setDescription("Meme text animation style").setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Bounce", value: "bounce" },
+              { name: "Tapeworm", value: "tapeworm" },
+              { name: "Random", value: "random" }
+            )
         )
     );
 
@@ -788,6 +874,7 @@ client.on("interactionCreate", async (interaction) => {
     const useGm = interaction.options.getBoolean("gm") ?? false;
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
+    const textStyle = interaction.options.getString("textstyle") ?? "normal";
 
     if (subcommand === "display") {
       const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
@@ -823,7 +910,7 @@ client.on("interactionCreate", async (interaction) => {
       const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
 
       try {
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom, textStyle);
         const direction = rightToLeft ? "→" : "←";
         const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
         await interaction.editReply({
@@ -847,6 +934,7 @@ client.on("interactionCreate", async (interaction) => {
     const useGm = interaction.options.getBoolean("gm") ?? false;
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
+    const textStyle = interaction.options.getString("textstyle") ?? "normal";
 
     if (subcommand === "display") {
       const id = interaction.options.getInteger("id");
@@ -907,7 +995,7 @@ client.on("interactionCreate", async (interaction) => {
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
         const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom, textStyle);
         const direction = rightToLeft ? "→" : "←";
         const label = comradeName.replace(/\.\w+$/, "");
         const file = new AttachmentBuilder(gif, {
