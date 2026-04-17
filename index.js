@@ -435,7 +435,8 @@ client.once("ready", async () => {
             .addChoices(
               { name: "Normal", value: "normal" },
               { name: "Fast (1.5x)", value: "fast" },
-              { name: "Brawndor (2.2x)", value: "brawndor" }
+              { name: "Brawndor (2.2x)", value: "brawndor" },
+              { name: "cryptoph03n1x (x69420)", value: "cryptoph03n1x" }
             )
         )
         .addBooleanOption((opt) =>
@@ -713,8 +714,8 @@ client.on("interactionCreate", async (interaction) => {
 
         const bg = bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
         const bgW = bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
-        const frameDelay = speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
-        const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
+        const frameDelay = speedChoice === "cryptoph03n1x" ? 20 : speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
+        const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
         const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
         const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay);
