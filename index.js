@@ -46,8 +46,8 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 </fontconfig>`);
 
 // Meme text system: auto-scaling + per-character animation
-const PIZZA_LETTER_W = 44; // px per letter at font-size 100 (slightly tight to avoid gaps)
-const PIZZA_SPACE_W = 20;  // px per space at font-size 100
+const PIZZA_LETTER_W = 48; // px per letter at font-size 100
+const PIZZA_SPACE_W = 22;  // px per space at font-size 100
 const MEME_MAX_FONT = 80;
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
