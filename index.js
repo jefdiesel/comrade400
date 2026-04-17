@@ -11,6 +11,7 @@ const {
 } = require("discord.js");
 const sharp = require("sharp");
 const path = require("path");
+const fs = require("fs");
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) {
@@ -26,6 +27,43 @@ const MAX_CACHE_ENTRIES = 100;
 const ANIM_FRAMES = 128;
 const ANIM_FRAME_DELAY = 90;
 const ANIM_SIZE = 64;
+const MEME_MAX_CHARS = 20;
+
+// Load Pizzascript font as base64 for SVG embedding
+const pizzaFontB64 = fs.readFileSync(path.join(__dirname, "Pizzascript-Sneps.otf")).toString("base64");
+
+// Generate a 400x400 transparent SVG overlay with meme text (top and/or bottom)
+function buildMemeOverlaySvg(topText, bottomText) {
+  const size = DEFAULT_SIZE;
+  const fontSize = 36;
+  const strokeWidth = 4;
+  const topY = 45;
+  const bottomY = size - 18;
+
+  let textElements = "";
+  if (topText) {
+    textElements += `
+      <text x="${size / 2}" y="${topY}" text-anchor="middle" font-family="Pizzascript" font-size="${fontSize}" fill="white" stroke="black" stroke-width="${strokeWidth}" paint-order="stroke">${escapeXml(topText)}</text>`;
+  }
+  if (bottomText) {
+    textElements += `
+      <text x="${size / 2}" y="${bottomY}" text-anchor="middle" font-family="Pizzascript" font-size="${fontSize}" fill="white" stroke="black" stroke-width="${strokeWidth}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
+  }
+
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+  <defs><style>
+    @font-face {
+      font-family: 'Pizzascript';
+      src: url('data:font/otf;base64,${pizzaFontB64}') format('opentype');
+    }
+  </style></defs>
+  ${textElements}
+</svg>`);
+}
+
+function escapeXml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 const COMRADE_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px_noBG/";
@@ -232,6 +270,26 @@ async function applyGmOverlay(pngBuffer) {
     .toBuffer();
 }
 
+// Render meme text overlay as raw RGBA at 400x400
+async function renderMemeRaw(topText, bottomText) {
+  const svg = buildMemeOverlaySvg(topText, bottomText);
+  return sharp(svg)
+    .resize(DEFAULT_SIZE, DEFAULT_SIZE)
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
+}
+
+// Apply meme text to a 400x400 PNG buffer
+async function applyMemeOverlay(pngBuffer, topText, bottomText) {
+  const svg = buildMemeOverlaySvg(topText, bottomText);
+  const overlay = await sharp(svg).png().toBuffer();
+  return sharp(pngBuffer)
+    .composite([{ input: overlay, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+}
+
 function cacheSet(key, buffer) {
   if (imageCache.size >= MAX_CACHE_ENTRIES) {
     const oldest = imageCache.keys().next().value;
@@ -292,7 +350,9 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false) {
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false, memeTop = null, memeBottom = null) {
+  // Pre-render meme overlay as raw RGBA if needed
+  const memeRaw = (memeTop || memeBottom) ? await renderMemeRaw(memeTop, memeBottom) : null;
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -355,14 +415,26 @@ async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = 
       .resize(DEFAULT_SIZE, DEFAULT_SIZE, { kernel: sharp.kernel.nearest })
       .raw()
       .toBuffer();
+    // Composite overlays onto upscaled frame
+    const sz = DEFAULT_SIZE * DEFAULT_SIZE * 4;
     if (useGm && gmOverlay400) {
-      const sz = DEFAULT_SIZE * DEFAULT_SIZE * 4;
       for (let i = 0; i < sz; i += 4) {
         if (gmOverlay400[i + 3] > 0) {
           upscaled[i] = gmOverlay400[i];
           upscaled[i + 1] = gmOverlay400[i + 1];
           upscaled[i + 2] = gmOverlay400[i + 2];
           upscaled[i + 3] = gmOverlay400[i + 3];
+        }
+      }
+    }
+    if (memeRaw) {
+      for (let i = 0; i < sz; i += 4) {
+        const a = memeRaw[i + 3];
+        if (a > 0) {
+          upscaled[i] = memeRaw[i];
+          upscaled[i + 1] = memeRaw[i + 1];
+          upscaled[i + 2] = memeRaw[i + 2];
+          upscaled[i + 3] = a;
         }
       }
     }
@@ -451,6 +523,12 @@ client.once("ready", async () => {
         .addBooleanOption((opt) =>
           opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
         )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
     )
     .addSubcommand((sub) =>
       sub
@@ -494,6 +572,12 @@ client.once("ready", async () => {
         .addBooleanOption((opt) =>
           opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
         )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
     );
 
   const cdcCommand = new SlashCommandBuilder()
@@ -508,6 +592,12 @@ client.once("ready", async () => {
         )
         .addBooleanOption((opt) =>
           opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
         )
     )
     .addSubcommand((sub) =>
@@ -549,6 +639,12 @@ client.once("ready", async () => {
         .addBooleanOption((opt) =>
           opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
         )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
     );
 
   const cotdCommand = new SlashCommandBuilder()
@@ -559,6 +655,12 @@ client.once("ready", async () => {
     )
     .addBooleanOption((opt) =>
       opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+    )
+    .addStringOption((opt) =>
+      opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
     );
 
   const nyanCommand = new SlashCommandBuilder()
@@ -667,6 +769,8 @@ client.on("interactionCreate", async (interaction) => {
     const id = interaction.options.getInteger("id");
 
     const useGm = interaction.options.getBoolean("gm") ?? false;
+    const memeTop = interaction.options.getString("top") ?? null;
+    const memeBottom = interaction.options.getString("bottom") ?? null;
 
     if (subcommand === "display") {
       const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
@@ -678,6 +782,7 @@ client.on("interactionCreate", async (interaction) => {
       try {
         let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         if (useGm) resized = await applyGmOverlay(resized);
+        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
         const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
         await interaction.editReply({ content: `**Call Data Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -701,7 +806,7 @@ client.on("interactionCreate", async (interaction) => {
       const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
 
       try {
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom);
         const direction = rightToLeft ? "→" : "←";
         const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
         await interaction.editReply({
@@ -723,6 +828,8 @@ client.on("interactionCreate", async (interaction) => {
     const subcommand = interaction.options.getSubcommand();
 
     const useGm = interaction.options.getBoolean("gm") ?? false;
+    const memeTop = interaction.options.getString("top") ?? null;
+    const memeBottom = interaction.options.getString("bottom") ?? null;
 
     if (subcommand === "display") {
       const id = interaction.options.getInteger("id");
@@ -735,6 +842,7 @@ client.on("interactionCreate", async (interaction) => {
       try {
         let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         if (useGm) resized = await applyGmOverlay(resized);
+        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
         const file = new AttachmentBuilder(resized, { name: `pizza_${id}.png` });
         await interaction.editReply({ content: `**Pizza Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -782,7 +890,7 @@ client.on("interactionCreate", async (interaction) => {
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
         const bgLabel = bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom);
         const direction = rightToLeft ? "→" : "←";
         const label = comradeName.replace(/\.\w+$/, "");
         const file = new AttachmentBuilder(gif, {
@@ -807,6 +915,8 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.deferReply();
     const id = interaction.options.getInteger("id");
     const useGm = interaction.options.getBoolean("gm") ?? false;
+    const memeTop = interaction.options.getString("top") ?? null;
+    const memeBottom = interaction.options.getString("bottom") ?? null;
     const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
     if (!buffer) {
       await interaction.deleteReply();
@@ -816,6 +926,7 @@ client.on("interactionCreate", async (interaction) => {
     try {
       let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
       if (useGm) resized = await applyGmOverlay(resized);
+      if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
       const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
       await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
     } catch (err) {
