@@ -31,6 +31,8 @@ const COMRADE_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px_noBG/";
 const CDC_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/call-data-comrades/cdc_32px/";
+const CDC_NOBG_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/call-data-comrades/cdc_32px_noBG/";
 const COTD_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/comrades-of-the-dead/cotd_32px/";
 const PC_BASE_URL =
@@ -42,6 +44,7 @@ const imageCache = new Map();
 // Map of item number -> filename from the repo
 const comradeIndex = new Map();
 const cdcIndex = new Map(); // number -> { sub, filename } (subcategory path)
+const cdcNoBgIndex = new Map(); // number -> { sub, filename } (noBG versions for animation)
 const cotdIndex = new Map(); // number -> filename
 const pcIndex = new Map(); // number -> filename
 
@@ -643,14 +646,13 @@ client.on("interactionCreate", async (interaction) => {
     const subcommand = interaction.options.getSubcommand();
     const id = interaction.options.getInteger("id");
 
-    const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
-    if (!buffer) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `CDC #${id} not found.`, ephemeral: true });
-      return;
-    }
-
     if (subcommand === "display") {
+      const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `CDC #${id} not found.`, ephemeral: true });
+        return;
+      }
       try {
         const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
@@ -661,6 +663,12 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
       }
     } else if (subcommand === "animate") {
+      const buffer = await fetchFromIndex(cdcNoBgIndex, CDC_NOBG_BASE_URL, id, true);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `CDC #${id} not found (noBG).`, ephemeral: true });
+        return;
+      }
       const bgKey = interaction.options.getString("background");
       const speedChoice = interaction.options.getString("speed") ?? "normal";
       const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
@@ -1024,6 +1032,7 @@ Promise.all([
   loadCityBackground(),
   loadComradeIndex(),
   loadCollectionIndex("art/call-data-comrades/cdc_32px", cdcIndex, true),
+  loadCollectionIndex("art/call-data-comrades/cdc_32px_noBG", cdcNoBgIndex, true),
   loadCollectionIndex("art/comrades-of-the-dead/cotd_32px", cotdIndex),
   loadCollectionIndex("art/pizza-comrades/pc_64px", pcIndex),
 ]).then(() => client.login(TOKEN));
