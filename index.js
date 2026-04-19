@@ -49,10 +49,10 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 
 // Meme text system: auto-scaling + per-character animation
 const FONT_METRICS = {
-  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript", caps: false },
-  impact:      { letterW: 58, spaceW: 18, family: "Impact", caps: true },
+  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript", caps: false, topY: 0.85 },
+  impact:      { letterW: 44, spaceW: 14, family: "Impact", caps: true, topY: 1.05 },
 };
-const MEME_MAX_FONT = { pizzascript: 80, impact: 60 };
+const MEME_MAX_FONT = { pizzascript: 80, impact: 70 };
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
@@ -139,7 +139,7 @@ function buildMemeOverlaySvg(topText, bottomText, phase = 0, style = "normal", f
   let textElements = "";
   if (topText) {
     const fs = memeFont(topText, font);
-    const baseY = Math.round(fs * 0.85);
+    const baseY = Math.round(fs * m.topY);
     if (style === "normal") {
       const sw = Math.max(3, Math.round(fs / 12));
       textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="${m.family}" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
