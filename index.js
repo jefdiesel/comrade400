@@ -49,10 +49,10 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 
 // Meme text system: auto-scaling + per-character animation
 const FONT_METRICS = {
-  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript" },
-  impact:      { letterW: 30, spaceW: 14, family: "Impact" },
+  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript", caps: false },
+  impact:      { letterW: 58, spaceW: 18, family: "Impact", caps: true },
 };
-const MEME_MAX_FONT = 80;
+const MEME_MAX_FONT = { pizzascript: 80, impact: 60 };
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
@@ -64,10 +64,13 @@ function memeTextWidth(text, fs, font = "pizzascript") {
 }
 
 function memeFont(text, font = "pizzascript") {
+  const m = FONT_METRICS[font] || FONT_METRICS.pizzascript;
+  if (m.caps) text = text.toUpperCase();
   const targetWidth = DEFAULT_SIZE * 0.9;
   const w100 = memeTextWidth(text, 100, font);
   const sz = Math.round((targetWidth / w100) * 100);
-  return Math.max(MEME_MIN_FONT, Math.min(MEME_MAX_FONT, sz));
+  const maxFont = MEME_MAX_FONT[font] || MEME_MAX_FONT.pizzascript;
+  return Math.max(MEME_MIN_FONT, Math.min(maxFont, sz));
 }
 
 function getCharOffset(charIndex, phase, style, bounceAmt) {
@@ -128,6 +131,10 @@ function renderMemeLine(text, baseY, phase, style, font = "pizzascript") {
 
 function buildMemeOverlaySvg(topText, bottomText, phase = 0, style = "normal", font = "pizzascript") {
   const m = FONT_METRICS[font] || FONT_METRICS.pizzascript;
+  if (m.caps) {
+    if (topText) topText = topText.toUpperCase();
+    if (bottomText) bottomText = bottomText.toUpperCase();
+  }
   const size = DEFAULT_SIZE;
   let textElements = "";
   if (topText) {
