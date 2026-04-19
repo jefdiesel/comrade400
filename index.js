@@ -49,7 +49,7 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 
 // Meme text system: auto-scaling + per-character animation
 const FONT_METRICS = {
-  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript", caps: false, topY: 0.85 },
+  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript Sneps", caps: false, topY: 0.85 },
   impact:      { letterW: 52, spaceW: 16, family: "Impact", caps: true, topY: 1.05 },
 };
 const MEME_MAX_FONT = { pizzascript: 80, impact: 64 };
