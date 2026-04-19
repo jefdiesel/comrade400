@@ -29,11 +29,13 @@ const ANIM_FRAME_DELAY = 90;
 const ANIM_SIZE = 64;
 const MEME_MAX_CHARS = 20;
 
-// Register Pizzascript font with fontconfig so librsvg can find it
+// Register fonts with fontconfig so librsvg can find them
 const fontDir = path.join(__dirname, "fonts");
 if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir);
 const fontDest = path.join(fontDir, "Pizzascript-Sneps.otf");
 if (!fs.existsSync(fontDest)) fs.copyFileSync(path.join(__dirname, "Pizzascript-Sneps.otf"), fontDest);
+const impactDest = path.join(fontDir, "Impact.ttf");
+if (!fs.existsSync(impactDest)) fs.copyFileSync(path.join(__dirname, "Impact.ttf"), impactDest);
 // Point fontconfig to our fonts directory
 process.env.FONTCONFIG_PATH = process.env.FONTCONFIG_PATH || "";
 process.env.FONTCONFIG_FILE = path.join(fontDir, "fonts.conf");
@@ -46,21 +48,24 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 </fontconfig>`);
 
 // Meme text system: auto-scaling + per-character animation
-const PIZZA_LETTER_W = 48; // px per letter at font-size 100
-const PIZZA_SPACE_W = 22;  // px per space at font-size 100
+const FONT_METRICS = {
+  pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript" },
+  impact:      { letterW: 30, spaceW: 14, family: "Impact" },
+};
 const MEME_MAX_FONT = 80;
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
-function memeTextWidth(text, fs) {
+function memeTextWidth(text, fs, font = "pizzascript") {
+  const m = FONT_METRICS[font] || FONT_METRICS.pizzascript;
   let w = 0;
-  for (const ch of text) w += (ch === " " ? PIZZA_SPACE_W : PIZZA_LETTER_W);
+  for (const ch of text) w += (ch === " " ? m.spaceW : m.letterW);
   return w * fs / 100;
 }
 
-function memeFont(text) {
+function memeFont(text, font = "pizzascript") {
   const targetWidth = DEFAULT_SIZE * 0.9;
-  const w100 = memeTextWidth(text, 100);
+  const w100 = memeTextWidth(text, 100, font);
   const sz = Math.round((targetWidth / w100) * 100);
   return Math.max(MEME_MIN_FONT, Math.min(MEME_MAX_FONT, sz));
 }
@@ -93,12 +98,13 @@ function memeFrameCount(style) {
 }
 
 // Render a line of text as individual <text> elements with per-char Y offsets
-function renderMemeLine(text, baseY, phase, style) {
-  const fs = memeFont(text);
+function renderMemeLine(text, baseY, phase, style, font = "pizzascript") {
+  const m = FONT_METRICS[font] || FONT_METRICS.pizzascript;
+  const fs = memeFont(text, font);
   const sw = Math.max(3, Math.round(fs / 12));
-  const letterW = PIZZA_LETTER_W * fs / 100;
-  const spaceW = PIZZA_SPACE_W * fs / 100;
-  const totalW = memeTextWidth(text, fs);
+  const letterW = m.letterW * fs / 100;
+  const spaceW = m.spaceW * fs / 100;
+  const totalW = memeTextWidth(text, fs, font);
   const startX = (DEFAULT_SIZE - totalW) / 2;
   const bounce = Math.round(MEME_BOUNCE_PX * fs / 50);
 
@@ -110,7 +116,7 @@ function renderMemeLine(text, baseY, phase, style) {
     if (ch !== " ") {
       const yOff = getCharOffset(ci, phase, style, bounce);
       const y = Math.round(baseY + yOff);
-      elements += `<text x="${Math.round(x)}" y="${y}" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(ch)}</text>`;
+      elements += `<text x="${Math.round(x)}" y="${y}" font-family="${m.family}" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(ch)}</text>`;
       x += letterW;
       ci++;
     } else {
@@ -120,27 +126,28 @@ function renderMemeLine(text, baseY, phase, style) {
   return elements;
 }
 
-function buildMemeOverlaySvg(topText, bottomText, phase = 0, style = "normal") {
+function buildMemeOverlaySvg(topText, bottomText, phase = 0, style = "normal", font = "pizzascript") {
+  const m = FONT_METRICS[font] || FONT_METRICS.pizzascript;
   const size = DEFAULT_SIZE;
   let textElements = "";
   if (topText) {
-    const fs = memeFont(topText);
+    const fs = memeFont(topText, font);
     const baseY = Math.round(fs * 0.85);
     if (style === "normal") {
       const sw = Math.max(3, Math.round(fs / 12));
-      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
+      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="${m.family}" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(topText)}</text>`;
     } else {
-      textElements += renderMemeLine(topText, baseY, phase, style);
+      textElements += renderMemeLine(topText, baseY, phase, style, font);
     }
   }
   if (bottomText) {
-    const fs = memeFont(bottomText);
+    const fs = memeFont(bottomText, font);
     const baseY = size - Math.round(fs * 0.25);
     if (style === "normal") {
       const sw = Math.max(3, Math.round(fs / 12));
-      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="Pizzascript" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
+      textElements += `<text x="${size / 2}" y="${baseY}" text-anchor="middle" font-family="${m.family}" font-size="${fs}" fill="white" stroke="black" stroke-width="${sw}" paint-order="stroke">${escapeXml(bottomText)}</text>`;
     } else {
-      textElements += renderMemeLine(bottomText, baseY, phase, style);
+      textElements += renderMemeLine(bottomText, baseY, phase, style, font);
     }
   }
 
@@ -371,11 +378,11 @@ async function applyGmOverlay(pngBuffer) {
 }
 
 // Pre-render all meme animation phases as raw RGBA buffers
-async function renderMemePhases(topText, bottomText, style = "normal") {
+async function renderMemePhases(topText, bottomText, style = "normal", font = "pizzascript") {
   const frames = memeFrameCount(style);
   const phases = [];
   for (let p = 0; p < frames; p++) {
-    const svg = buildMemeOverlaySvg(topText, bottomText, p, style);
+    const svg = buildMemeOverlaySvg(topText, bottomText, p, style, font);
     const raw = await sharp(svg)
       .resize(DEFAULT_SIZE, DEFAULT_SIZE)
       .ensureAlpha()
@@ -387,8 +394,8 @@ async function renderMemePhases(topText, bottomText, style = "normal") {
 }
 
 // Apply meme text to a 400x400 PNG buffer (static, no animation)
-async function applyMemeOverlay(pngBuffer, topText, bottomText) {
-  const svg = buildMemeOverlaySvg(topText, bottomText, 0, "normal");
+async function applyMemeOverlay(pngBuffer, topText, bottomText, font = "pizzascript") {
+  const svg = buildMemeOverlaySvg(topText, bottomText, 0, "normal", font);
   const overlay = await sharp(svg).png().toBuffer();
   return sharp(pngBuffer)
     .composite([{ input: overlay, top: 0, left: 0 }])
@@ -457,9 +464,9 @@ function isSupported(contentType, name) {
 }
 
 // Build a 64x64 animated GIF: character over scrolling city background
-async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false, memeTop = null, memeBottom = null, textStyle = "normal") {
+async function buildAnimatedGif(charBuffer, rightToLeft, bg = cityBg, bgWidth = cityBgWidth, frameDelay = ANIM_FRAME_DELAY, useGm = false, memeTop = null, memeBottom = null, textStyle = "normal", font = "pizzascript") {
   // Pre-render meme overlay phases as raw RGBA if needed
-  const memePhases = (memeTop || memeBottom) ? await renderMemePhases(memeTop, memeBottom, textStyle) : null;
+  const memePhases = (memeTop || memeBottom) ? await renderMemePhases(memeTop, memeBottom, textStyle, font) : null;
   // Get character pixels at 64x64
   const charRaw = await sharp(charBuffer)
     .resize(ANIM_SIZE, ANIM_SIZE, {
@@ -700,6 +707,13 @@ client.once("ready", async () => {
               { name: "Random", value: "random" }
             )
         )
+        .addStringOption((opt) =>
+          opt.setName("font").setDescription("Meme text font").setRequired(false)
+            .addChoices(
+              { name: "Pizzascript", value: "pizzascript" },
+              { name: "Impact", value: "impact" }
+            )
+        )
     );
 
   const cdcCommand = new SlashCommandBuilder()
@@ -776,6 +790,13 @@ client.once("ready", async () => {
               { name: "Random", value: "random" }
             )
         )
+        .addStringOption((opt) =>
+          opt.setName("font").setDescription("Meme text font").setRequired(false)
+            .addChoices(
+              { name: "Pizzascript", value: "pizzascript" },
+              { name: "Impact", value: "impact" }
+            )
+        )
     );
 
   const cotdCommand = new SlashCommandBuilder()
@@ -792,6 +813,13 @@ client.once("ready", async () => {
     )
     .addStringOption((opt) =>
       opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+    )
+    .addStringOption((opt) =>
+      opt.setName("font").setDescription("Meme text font").setRequired(false)
+        .addChoices(
+          { name: "Pizzascript", value: "pizzascript" },
+          { name: "Impact", value: "impact" }
+        )
     );
 
   const nyanCommand = new SlashCommandBuilder()
@@ -819,6 +847,13 @@ client.once("ready", async () => {
           { name: "Bounce", value: "bounce" },
           { name: "Tapeworm", value: "tapeworm" },
           { name: "Random", value: "random" }
+        )
+    )
+    .addStringOption((opt) =>
+      opt.setName("font").setDescription("Meme text font").setRequired(false)
+        .addChoices(
+          { name: "Pizzascript", value: "pizzascript" },
+          { name: "Impact", value: "impact" }
         )
     );
 
@@ -948,6 +983,7 @@ client.on("interactionCreate", async (interaction) => {
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
     const textStyle = interaction.options.getString("textstyle") ?? "normal";
+    const font = interaction.options.getString("font") ?? "pizzascript";
 
     if (subcommand === "display") {
       const buffer = await fetchFromIndex(cdcIndex, CDC_BASE_URL, id, true);
@@ -959,7 +995,7 @@ client.on("interactionCreate", async (interaction) => {
       try {
         let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         if (useGm) resized = await applyGmOverlay(resized);
-        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
+        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom, font);
         const file = new AttachmentBuilder(resized, { name: `cdc_${id}.png` });
         await interaction.editReply({ content: `**Call Data Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -983,7 +1019,7 @@ client.on("interactionCreate", async (interaction) => {
       const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
 
       try {
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom, textStyle);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom, textStyle, font);
         const direction = rightToLeft ? "→" : "←";
         const file = new AttachmentBuilder(gif, { name: `cdc_${id}_${bgKey}.gif` });
         await interaction.editReply({
@@ -1008,6 +1044,7 @@ client.on("interactionCreate", async (interaction) => {
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
     const textStyle = interaction.options.getString("textstyle") ?? "normal";
+    const font = interaction.options.getString("font") ?? "pizzascript";
 
     if (subcommand === "display") {
       const id = interaction.options.getInteger("id");
@@ -1020,7 +1057,7 @@ client.on("interactionCreate", async (interaction) => {
       try {
         let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
         if (useGm) resized = await applyGmOverlay(resized);
-        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
+        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom, font);
         const file = new AttachmentBuilder(resized, { name: `pizza_${id}.png` });
         await interaction.editReply({ content: `**Pizza Comrade #${id}**`, files: [file] });
       } catch (err) {
@@ -1068,7 +1105,7 @@ client.on("interactionCreate", async (interaction) => {
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
         const bgLabel = bgChoice === "night" ? " (Night)" : bgChoice === "pepperonia_blur" ? " (Blur)" : "";
 
-        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom, textStyle);
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom, textStyle, font);
         const direction = rightToLeft ? "→" : "←";
         const label = comradeName.replace(/\.\w+$/, "");
         const file = new AttachmentBuilder(gif, {
@@ -1095,6 +1132,7 @@ client.on("interactionCreate", async (interaction) => {
     const useGm = interaction.options.getBoolean("gm") ?? false;
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
+    const font = interaction.options.getString("font") ?? "pizzascript";
     const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
     if (!buffer) {
       await interaction.deleteReply();
@@ -1104,7 +1142,7 @@ client.on("interactionCreate", async (interaction) => {
     try {
       let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
       if (useGm) resized = await applyGmOverlay(resized);
-      if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom);
+      if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom, font);
       const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
       await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
     } catch (err) {
@@ -1123,8 +1161,9 @@ client.on("interactionCreate", async (interaction) => {
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
     const textStyle = interaction.options.getString("textstyle") ?? "normal";
+    const font = interaction.options.getString("font") ?? "pizzascript";
     try {
-      const gif = await buildAnimatedGif(nyanBuffer, rightToLeft, cityBg, cityBgWidth, ANIM_FRAME_DELAY, useGm, memeTop, memeBottom, textStyle);
+      const gif = await buildAnimatedGif(nyanBuffer, rightToLeft, cityBg, cityBgWidth, ANIM_FRAME_DELAY, useGm, memeTop, memeBottom, textStyle, font);
       const direction = rightToLeft ? "→" : "←";
       const file = new AttachmentBuilder(gif, { name: "nyan_comrade.gif" });
       await interaction.editReply({
