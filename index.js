@@ -50,9 +50,9 @@ fs.writeFileSync(path.join(fontDir, "fonts.conf"), `<?xml version="1.0"?>
 // Meme text system: auto-scaling + per-character animation
 const FONT_METRICS = {
   pizzascript: { letterW: 48, spaceW: 22, family: "Pizzascript", caps: false, topY: 0.85 },
-  impact:      { letterW: 44, spaceW: 14, family: "Impact", caps: true, topY: 1.05 },
+  impact:      { letterW: 52, spaceW: 16, family: "Impact", caps: true, topY: 1.05 },
 };
-const MEME_MAX_FONT = { pizzascript: 80, impact: 70 };
+const MEME_MAX_FONT = { pizzascript: 80, impact: 64 };
 const MEME_MIN_FONT = 30;
 const MEME_BOUNCE_PX = 4; // bounce offset in pixels
 
