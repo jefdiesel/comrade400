@@ -194,6 +194,8 @@ let cityBgBlur = null;
 let cityBgBlurWidth = 0;
 let cityBgNight = null;
 let cityBgNightWidth = 0;
+let pizzaTownBg = null;
+let pizzaTownBgWidth = 0;
 let nyanBuffer = null;
 let gmOverlay400 = null; // 400x400 RGBA raw buffer with GM bubble positioned
 
@@ -204,6 +206,8 @@ const CDC_BG_FILES = {
   drain_plains_2: { file: "DrainPlains_wide_04.webp", label: "Drain Plains 2" },
   block_city: { file: "Block_City_wide_Glow.webp", label: "Block City" },
   beach_club: { file: "beachcity.png", label: "Beach Club" },
+  blood_moon: { file: "Blood_Moon_over_Block_City_wide.png", label: "Blood Moon" },
+  full_moon: { file: "Full_Moon_over_Block_City_wide.webp", label: "Full Moon" },
 };
 
 async function loadComradeIndex() {
@@ -335,6 +339,15 @@ async function loadCityBackground() {
     cityBgNight[i + 2] = Math.round(cityBgNight[i + 2] * 0.15);
   }
   console.log(`City background (night) loaded: ${cityBgNightWidth}x${ANIM_SIZE}`);
+
+  const rawPizzaTown = await sharp(path.join(__dirname, "Pizza_Town_Cityscape_with_Sun_wide.webp"))
+    .resize({ height: ANIM_SIZE, kernel: sharp.kernel.nearest })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  pizzaTownBgWidth = rawPizzaTown.info.width;
+  pizzaTownBg = rawPizzaTown.data;
+  console.log(`Pizza Town background loaded: ${pizzaTownBgWidth}x${ANIM_SIZE}`);
 
   nyanBuffer = await sharp(path.join(__dirname, "nyan.png")).png().toBuffer();
   console.log("Nyan comrade loaded");
@@ -675,7 +688,8 @@ client.once("ready", async () => {
             .addChoices(
               { name: "Pepperonia City", value: "pepperonia" },
               { name: "Pepperonia City (Blur)", value: "pepperonia_blur" },
-              { name: "Night Mode", value: "night" }
+              { name: "Night Mode", value: "night" },
+              { name: "Pizza Town", value: "pizza_town" }
             )
         )
         .addStringOption((opt) =>
@@ -759,7 +773,9 @@ client.once("ready", async () => {
               { name: "Drain Plains 1", value: "drain_plains_1" },
               { name: "Drain Plains 2", value: "drain_plains_2" },
               { name: "Block City", value: "block_city" },
-              { name: "Beach Club", value: "beach_club" }
+              { name: "Beach Club", value: "beach_club" },
+              { name: "Blood Moon", value: "blood_moon" },
+              { name: "Full Moon", value: "full_moon" }
             )
         )
         .addStringOption((opt) =>
@@ -879,7 +895,10 @@ client.once("ready", async () => {
           { name: "Drain Plains 1", value: "drain_plains_1" },
           { name: "Drain Plains 2", value: "drain_plains_2" },
           { name: "Block City", value: "block_city" },
-          { name: "Beach Club", value: "beach_club" }
+          { name: "Beach Club", value: "beach_club" },
+          { name: "Blood Moon", value: "blood_moon" },
+          { name: "Full Moon", value: "full_moon" },
+          { name: "Pizza Town", value: "pizza_town" }
         )
     )
     .addBooleanOption((opt) =>
@@ -1106,11 +1125,11 @@ client.on("interactionCreate", async (interaction) => {
           return;
         }
 
-        const bg = bgChoice === "night" ? cityBgNight : bgChoice === "pepperonia_blur" ? cityBgBlur : cityBg;
-        const bgW = bgChoice === "night" ? cityBgNightWidth : bgChoice === "pepperonia_blur" ? cityBgBlurWidth : cityBgWidth;
+        const bg = bgChoice === "night" ? cityBgNight : bgChoice === "pepperonia_blur" ? cityBgBlur : bgChoice === "pizza_town" ? pizzaTownBg : cityBg;
+        const bgW = bgChoice === "night" ? cityBgNightWidth : bgChoice === "pepperonia_blur" ? cityBgBlurWidth : bgChoice === "pizza_town" ? pizzaTownBgWidth : cityBgWidth;
         const frameDelay = speedChoice === "cryptoph03n1x" ? 20 : speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
         const speedLabel = speedChoice === "cryptoph03n1x" ? " 💀" : speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
-        const bgLabel = bgChoice === "night" ? " (Night)" : bgChoice === "pepperonia_blur" ? " (Blur)" : "";
+        const bgLabel = bgChoice === "night" ? " (Night)" : bgChoice === "pepperonia_blur" ? " (Blur)" : bgChoice === "pizza_town" ? " (Pizza Town)" : "";
 
         const gif = await buildAnimatedGif(buffer, rightToLeft, bg, bgW, frameDelay, useGm, memeTop, memeBottom, textStyle, font);
         const direction = rightToLeft ? "→" : "←";
@@ -1196,6 +1215,8 @@ client.on("interactionCreate", async (interaction) => {
       bg = cityBgBlur; bgW = cityBgBlurWidth; bgName = "Pepperonia City (Blur)";
     } else if (bgChoice === "night") {
       bg = cityBgNight; bgW = cityBgNightWidth; bgName = "Night Mode";
+    } else if (bgChoice === "pizza_town") {
+      bg = pizzaTownBg; bgW = pizzaTownBgWidth; bgName = "Pizza Town";
     } else if (cdcBackgrounds[bgChoice]) {
       const entry = cdcBackgrounds[bgChoice];
       bg = entry.data; bgW = entry.width; bgName = entry.label;
