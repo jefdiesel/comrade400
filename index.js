@@ -952,6 +952,15 @@ client.once("ready", async () => {
         )
     );
 
+  const comrade400Command = new SlashCommandBuilder()
+    .setName("comrade400")
+    .setDescription("Comrade400 Bot — info & help")
+    .addSubcommand((sub) =>
+      sub
+        .setName("help")
+        .setDescription("Show how to use the bot")
+    );
+
   const bgCommand = new SlashCommandBuilder()
     .setName("bg")
     .setDescription("Show a scrolling background animation")
@@ -985,7 +994,7 @@ client.once("ready", async () => {
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
-      nyanCommand.toJSON(), bgCommand.toJSON(),
+      nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1068,6 +1077,54 @@ client.on("interactionCreate", async (interaction) => {
 
     const combined = [...startsWith, ...includes, ...numMatch].slice(0, 25);
     await interaction.respond(combined);
+    return;
+  }
+
+  // Slash command: /comrade400 help
+  if (interaction.isChatInputCommand() && interaction.commandName === "comrade400") {
+    const helpText = [
+      "# Comrade400 Bot",
+      "",
+      "## Auto-Upscale",
+      "Drop a small image (PNG/GIF/WebP, 128x128 or smaller) and the bot upscales it to 400x400. Use the buttons to resize to 400, 512, or 640.",
+      "",
+      "## Commands",
+      "",
+      "### `/pizza display id:<number>`",
+      "Show a Pizza Comrade at 400x400.",
+      "",
+      "### `/pizza animate comrade:<name or number>`",
+      "Animate a Pizza Comrade over a scrolling background.",
+      "- **background** — Pepperonia City, Pepperonia City (Blur), Night Mode, Pizza Town",
+      "- **speed** — Normal, Fast (1.5x), Brawndor (2.2x), cryptoph03n1x (max)",
+      "",
+      "### `/cdc display id:<number>`",
+      "Show a Call Data Comrade at 400x400.",
+      "",
+      "### `/cdc animate id:<number> background:<choice>`",
+      "Animate a Call Data Comrade. Backgrounds: Drain Plains 1 & 2, Block City, Beach Club, Blood Moon, Full Moon.",
+      "",
+      "### `/cotd display id:<number>`",
+      "Show a Comrade of the Dead at 400x400.",
+      "",
+      "### `/cotd animate id:<number> background:<choice>`",
+      "Animate a Comrade of the Dead. Same backgrounds as `/cdc`.",
+      "",
+      "### `/nyan`",
+      "Nyan Comrade animation over Pepperonia City.",
+      "",
+      "### `/bg background:<choice>`",
+      "Scrolling background with no character. All 10 backgrounds available.",
+      "",
+      "## Extras (work on any command)",
+      "- **gm** — adds a GM speech bubble",
+      "- **top / bottom** — meme text (max 20 chars each)",
+      "- **font** — Pizzascript (default) or Impact (ALL CAPS)",
+      "- **textstyle** — Normal, Bounce, Tapeworm, or Random",
+      "- **rightleft** — scroll right-to-left instead",
+    ].join("\n");
+
+    await interaction.reply({ content: helpText, ephemeral: true });
     return;
   }
 
