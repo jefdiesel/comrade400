@@ -175,6 +175,8 @@ const CDC_NOBG_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/call-data-comrades/cdc_32px_noBG/";
 const COTD_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/comrades-of-the-dead/cotd_32px/";
+const COTD_NOBG_BASE_URL =
+  "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/comrades-of-the-dead/cotd_32px_noBG/";
 const PC_BASE_URL =
   "https://raw.githubusercontent.com/NoMoreLabs/Comrades/main/art/pizza-comrades/pc_64px/";
 
@@ -186,6 +188,7 @@ const comradeIndex = new Map();
 const cdcIndex = new Map(); // number -> { sub, filename } (subcategory path)
 const cdcNoBgIndex = new Map(); // number -> { sub, filename } (noBG versions for animation)
 const cotdIndex = new Map(); // number -> filename
+const cotdNoBgIndex = new Map(); // number -> filename (noBG versions for animation)
 const pcIndex = new Map(); // number -> filename
 
 let cityBg = null;
@@ -824,24 +827,93 @@ client.once("ready", async () => {
 
   const cotdCommand = new SlashCommandBuilder()
     .setName("cotd")
-    .setDescription("Display a Comrade of the Dead at 400x400")
-    .addIntegerOption((opt) =>
-      opt.setName("id").setDescription("Item number").setRequired(true)
+    .setDescription("Comrades of the Dead — display or animate")
+    .addSubcommand((sub) =>
+      sub
+        .setName("display")
+        .setDescription("Display a Comrade of the Dead at 400x400")
+        .addIntegerOption((opt) =>
+          opt.setName("id").setDescription("Item number").setRequired(true)
+        )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("font").setDescription("Meme text font").setRequired(false)
+            .addChoices(
+              { name: "Pizzascript", value: "pizzascript" },
+              { name: "Impact", value: "impact" }
+            )
+        )
     )
-    .addBooleanOption((opt) =>
-      opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
-    )
-    .addStringOption((opt) =>
-      opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
-    )
-    .addStringOption((opt) =>
-      opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
-    )
-    .addStringOption((opt) =>
-      opt.setName("font").setDescription("Meme text font").setRequired(false)
-        .addChoices(
-          { name: "Pizzascript", value: "pizzascript" },
-          { name: "Impact", value: "impact" }
+    .addSubcommand((sub) =>
+      sub
+        .setName("animate")
+        .setDescription("Animate a Comrade of the Dead over a background")
+        .addIntegerOption((opt) =>
+          opt.setName("id").setDescription("Item number").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("background")
+            .setDescription("Choose a background")
+            .setRequired(true)
+            .addChoices(
+              { name: "Drain Plains 1", value: "drain_plains_1" },
+              { name: "Drain Plains 2", value: "drain_plains_2" },
+              { name: "Block City", value: "block_city" },
+              { name: "Beach Club", value: "beach_club" },
+              { name: "Blood Moon", value: "blood_moon" },
+              { name: "Full Moon", value: "full_moon" }
+            )
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("speed")
+            .setDescription("Animation speed")
+            .setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Fast", value: "fast" },
+              { name: "Brawndor", value: "brawndor" }
+            )
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName("rightleft")
+            .setDescription("Scroll right-to-left instead of left-to-right")
+            .setRequired(false)
+        )
+        .addBooleanOption((opt) =>
+          opt.setName("gm").setDescription("Add GM speech bubble").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("top").setDescription(`Top meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bottom").setDescription(`Bottom meme text (max ${MEME_MAX_CHARS} chars)`).setRequired(false).setMaxLength(MEME_MAX_CHARS)
+        )
+        .addStringOption((opt) =>
+          opt.setName("textstyle").setDescription("Meme text animation style").setRequired(false)
+            .addChoices(
+              { name: "Normal", value: "normal" },
+              { name: "Bounce", value: "bounce" },
+              { name: "Tapeworm", value: "tapeworm" },
+              { name: "Random", value: "random" }
+            )
+        )
+        .addStringOption((opt) =>
+          opt.setName("font").setDescription("Meme text font").setRequired(false)
+            .addChoices(
+              { name: "Pizzascript", value: "pizzascript" },
+              { name: "Impact", value: "impact" }
+            )
         )
     );
 
@@ -1151,30 +1223,64 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // Slash command: /cotd
+  // Slash command: /cotd (subcommands: display, animate)
   if (interaction.isChatInputCommand() && interaction.commandName === "cotd") {
     await interaction.deferReply();
+    const subcommand = interaction.options.getSubcommand();
     const id = interaction.options.getInteger("id");
+
     const useGm = interaction.options.getBoolean("gm") ?? false;
     const memeTop = interaction.options.getString("top") ?? null;
     const memeBottom = interaction.options.getString("bottom") ?? null;
     const font = interaction.options.getString("font") ?? "pizzascript";
-    const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
-    if (!buffer) {
-      await interaction.deleteReply();
-      await interaction.followUp({ content: `Comrade of the Dead #${id} not found.`, ephemeral: true });
-      return;
-    }
-    try {
-      let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
-      if (useGm) resized = await applyGmOverlay(resized);
-      if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom, font);
-      const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
-      await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
-    } catch (err) {
-      console.error("COTD failed:", err.message);
-      await interaction.deleteReply();
-      await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+
+    if (subcommand === "display") {
+      const buffer = await fetchFromIndex(cotdIndex, COTD_BASE_URL, id);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Comrade of the Dead #${id} not found.`, ephemeral: true });
+        return;
+      }
+      try {
+        let resized = await resizeBuffer(buffer, DEFAULT_SIZE);
+        if (useGm) resized = await applyGmOverlay(resized);
+        if (memeTop || memeBottom) resized = await applyMemeOverlay(resized, memeTop, memeBottom, font);
+        const file = new AttachmentBuilder(resized, { name: `cotd_${id}.png` });
+        await interaction.editReply({ content: `**Comrade of the Dead #${id}**`, files: [file] });
+      } catch (err) {
+        console.error("COTD display failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to process image.", ephemeral: true });
+      }
+    } else if (subcommand === "animate") {
+      const buffer = await fetchFromIndex(cotdNoBgIndex, COTD_NOBG_BASE_URL, id);
+      if (!buffer) {
+        await interaction.deleteReply();
+        await interaction.followUp({ content: `Comrade of the Dead #${id} not found (noBG).`, ephemeral: true });
+        return;
+      }
+      const bgKey = interaction.options.getString("background");
+      const speedChoice = interaction.options.getString("speed") ?? "normal";
+      const rightToLeft = interaction.options.getBoolean("rightleft") ?? false;
+      const textStyle = interaction.options.getString("textstyle") ?? "normal";
+      const bg = cdcBackgrounds[bgKey];
+
+      const frameDelay = speedChoice === "fast" ? 60 : speedChoice === "brawndor" ? 40 : ANIM_FRAME_DELAY;
+      const speedLabel = speedChoice === "fast" ? " ⚡" : speedChoice === "brawndor" ? " 🔥" : "";
+
+      try {
+        const gif = await buildAnimatedGif(buffer, rightToLeft, bg.data, bg.width, frameDelay, useGm, memeTop, memeBottom, textStyle, font);
+        const direction = rightToLeft ? "→" : "←";
+        const file = new AttachmentBuilder(gif, { name: `cotd_${id}_${bgKey}.gif` });
+        await interaction.editReply({
+          content: `**Comrade of the Dead #${id}** ${direction} — ${bg.label}${speedLabel}`,
+          files: [file],
+        });
+      } catch (err) {
+        console.error("COTD animate failed:", err.message);
+        await interaction.deleteReply();
+        await interaction.followUp({ content: "Failed to create animation.", ephemeral: true });
+      }
     }
     return;
   }
@@ -1285,5 +1391,6 @@ Promise.all([
   loadCollectionIndex("art/call-data-comrades/cdc_32px", cdcIndex, true),
   loadCollectionIndex("art/call-data-comrades/cdc_32px_noBG", cdcNoBgIndex, true),
   loadCollectionIndex("art/comrades-of-the-dead/cotd_32px", cotdIndex),
+  loadCollectionIndex("art/comrades-of-the-dead/cotd_32px_noBG", cotdNoBgIndex),
   loadCollectionIndex("art/pizza-comrades/pc_64px", pcIndex),
 ]).then(() => client.login(TOKEN));
