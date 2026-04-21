@@ -1259,8 +1259,8 @@ client.on("interactionCreate", async (interaction) => {
         `Wallet \`${data.address}\` verified!\n\n${lines.join("\n")}${roleText}`
       );
     } catch (err) {
-      console.error("Verify check error:", err.message);
-      await interaction.editReply("Failed to check verification. Try again.");
+      console.error("Verify check error:", err);
+      await interaction.editReply(`Verification check failed: ${err.message}`);
     }
     return;
   }
