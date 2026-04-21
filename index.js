@@ -13,6 +13,9 @@ const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs");
 
+const yonderData = require("./yonder.json");
+const YONDER_CONTENT_URL = "https://ord.satflow.com/content";
+
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) {
   console.error("Set DISCORD_TOKEN environment variable");
@@ -1023,6 +1026,22 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const yonderCommand = new SlashCommandBuilder()
+    .setName("yonder")
+    .setDescription("Yonder — display an ordinal")
+    .addSubcommand((sub) =>
+      sub
+        .setName("display")
+        .setDescription("Display a Yonder piece at 400x400")
+        .addStringOption((opt) =>
+          opt
+            .setName("piece")
+            .setDescription("Search by name or number (1-121)")
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+    );
+
   const verifyCommand = new SlashCommandBuilder()
     .setName("verify")
     .setDescription("Verify your Ethscriptions wallet holdings and get holder roles");
@@ -1033,7 +1052,7 @@ client.once("ready", async () => {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
-      verifyCommand.toJSON(),
+      verifyCommand.toJSON(), yonderCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1167,6 +1186,69 @@ client.on("interactionCreate", async (interaction) => {
     ].join("\n");
 
     await interaction.reply({ content: helpText, ephemeral: true });
+    return;
+  }
+
+  // Autocomplete: /yonder display piece
+  if (interaction.isAutocomplete() && interaction.commandName === "yonder") {
+    const query = interaction.options.getFocused().toLowerCase().trim();
+    const results = yonderData
+      .map((item, i) => ({ ...item, num: i + 1 }))
+      .filter((item) =>
+        item.name.toLowerCase().includes(query) ||
+        String(item.num).startsWith(query)
+      )
+      .slice(0, 25)
+      .map((item) => ({
+        name: `#${item.num} — ${item.name}`,
+        value: item.id,
+      }));
+    await interaction.respond(results);
+    return;
+  }
+
+  // Slash command: /yonder display
+  if (interaction.isChatInputCommand() && interaction.commandName === "yonder") {
+    await interaction.deferReply();
+    const piece = interaction.options.getString("piece");
+
+    // Find by ID (from autocomplete), name, or number
+    let entry = yonderData.find((item) => item.id === piece);
+    if (!entry) {
+      const num = parseInt(piece);
+      if (num >= 1 && num <= yonderData.length) {
+        entry = yonderData[num - 1];
+      }
+    }
+    if (!entry) {
+      entry = yonderData.find((item) =>
+        item.name.toLowerCase() === piece.toLowerCase()
+      );
+    }
+
+    if (!entry) {
+      await interaction.deleteReply();
+      await interaction.followUp({ content: `Yonder piece "${piece}" not found.`, ephemeral: true });
+      return;
+    }
+
+    try {
+      const url = `${YONDER_CONTENT_URL}/${entry.id}`;
+      const response = await fetch(url);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      // Convert AVIF to PNG and upscale
+      const resized = await sharp(buffer).resize(400, 400, { kernel: "nearest" }).png().toBuffer();
+      const idx = yonderData.indexOf(entry) + 1;
+      const file = new AttachmentBuilder(resized, { name: `yonder_${idx}.png` });
+      await interaction.editReply({
+        content: `**Yonder #${idx} — ${entry.name}**`,
+        files: [file],
+      });
+    } catch (err) {
+      console.error("Yonder display failed:", err.message);
+      await interaction.deleteReply();
+      await interaction.followUp({ content: "Failed to fetch Yonder image.", ephemeral: true });
+    }
     return;
   }
 
