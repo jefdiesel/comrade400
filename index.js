@@ -14,7 +14,7 @@ const path = require("path");
 const fs = require("fs");
 
 const yonderData = require("./yonder.json");
-const YONDER_CONTENT_URL = "https://ord.satflow.com/content";
+const YONDER_DL_URL = "https://nomorelabs.xyz/dls-yr";
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) {
@@ -1236,11 +1236,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     try {
-      const url = `${YONDER_CONTENT_URL}/${entry.id}`;
+      const url = `${YONDER_DL_URL}/${encodeURIComponent(entry.name)}.png`;
       const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
-      // Convert AVIF to PNG and upscale
-      const resized = await sharp(buffer).resize(400, 400, { kernel: "nearest" }).png().toBuffer();
+      const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
       const idx = yonderData.indexOf(entry) + 1;
       const file = new AttachmentBuilder(resized, { name: `yonder_${idx}.png` });
       await interaction.editReply({
