@@ -35,6 +35,8 @@ const VERIFY_API = `${VERIFY_SITE}/api/verify`;
 const VERIFY_ROLES = [
   { name: "Call Data Comrades", role: "CDC Holder" },
   { name: "Comrades of the Dead", role: "COTD Holder" },
+  { name: "Pizza Comrades", role: "Pizza Comrades Holder" },
+  { name: "Pizza Ninjas", role: "Pizza Ninjas Holder" },
 ];
 const verifyNonces = new Map();
 const NONCE_TTL = 10 * 60 * 1000; // 10 minutes
