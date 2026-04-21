@@ -37,6 +37,7 @@ const VERIFY_ROLES = [
   { name: "Comrades of the Dead", role: "COTD Holder" },
   { name: "Pizza Comrades", role: "Pizza Comrades Holder" },
   { name: "Pizza Ninjas", role: "Pizza Ninjas Holder" },
+  { name: "Yonder", role: "Yonder Holder" },
 ];
 const verifyNonces = new Map();
 const NONCE_TTL = 10 * 60 * 1000; // 10 minutes
