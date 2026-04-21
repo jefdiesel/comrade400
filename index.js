@@ -29,6 +29,37 @@ const ANIM_FRAME_DELAY = 90;
 const ANIM_SIZE = 64;
 const MEME_MAX_CHARS = 20;
 
+// Wallet verification
+const VERIFY_SITE = "https://chainhost.online";
+const VERIFY_API = `${VERIFY_SITE}/api/verify`;
+const VERIFY_ROLES = [
+  { name: "Call Data Comrades", role: "CDC Holder" },
+  { name: "Comrades of the Dead", role: "COTD Holder" },
+];
+const verifyNonces = new Map();
+const NONCE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function generateNonce() {
+  return [...Array(16)]
+    .map(() => Math.floor(Math.random() * 16).toString(16))
+    .join("");
+}
+
+async function ensureRoles(guild) {
+  const roles = {};
+  for (const v of VERIFY_ROLES) {
+    let role = guild.roles.cache.find((r) => r.name === v.role);
+    if (!role) {
+      role = await guild.roles.create({
+        name: v.role,
+        reason: "Comrade400 wallet verification",
+      });
+    }
+    roles[v.name] = role;
+  }
+  return roles;
+}
+
 // Register fonts with fontconfig so librsvg can find them
 const fontDir = path.join(__dirname, "fonts");
 if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir);
@@ -989,12 +1020,17 @@ client.once("ready", async () => {
         .setRequired(false)
     );
 
+  const verifyCommand = new SlashCommandBuilder()
+    .setName("verify")
+    .setDescription("Verify your Ethscriptions wallet holdings and get holder roles");
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
+      verifyCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1116,6 +1152,9 @@ client.on("interactionCreate", async (interaction) => {
       "### `/bg background:<choice>`",
       "Scrolling background with no character. All 10 backgrounds available.",
       "",
+      "### `/verify`",
+      "Verify your Ethscriptions wallet holdings. Sign a message to prove ownership, then get roles based on your CDC / COTD holdings.",
+      "",
       "## Extras (work on any command)",
       "- **gm** — adds a GM speech bubble",
       "- **top / bottom** — meme text (max 20 chars each)",
@@ -1125,6 +1164,104 @@ client.on("interactionCreate", async (interaction) => {
     ].join("\n");
 
     await interaction.reply({ content: helpText, ephemeral: true });
+    return;
+  }
+
+  // Slash command: /verify
+  if (interaction.isChatInputCommand() && interaction.commandName === "verify") {
+    const nonce = generateNonce();
+
+    verifyNonces.set(interaction.user.id, {
+      nonce,
+      timestamp: Date.now(),
+    });
+
+    const verifyUrl = `${VERIFY_SITE}/verify?nonce=${nonce}&guild=${encodeURIComponent(interaction.guild.name)}&user=${encodeURIComponent(interaction.user.username)}`;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel("Connect Wallet & Sign")
+        .setStyle(ButtonStyle.Link)
+        .setURL(verifyUrl),
+      new ButtonBuilder()
+        .setCustomId("verify_check")
+        .setLabel("Check Verification")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    await interaction.reply({
+      content: [
+        "**Wallet Verification**",
+        "",
+        "1. Click **Connect Wallet & Sign** to open the verification page",
+        "2. Connect your wallet and sign the message",
+        "3. Come back here and click **Check Verification**",
+      ].join("\n"),
+      components: [row],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Button: check verification status
+  if (interaction.isButton() && interaction.customId === "verify_check") {
+    const stored = verifyNonces.get(interaction.user.id);
+    if (!stored || Date.now() - stored.timestamp > NONCE_TTL) {
+      await interaction.reply({
+        content: "Verification expired. Run `/verify` again.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const res = await fetch(`${VERIFY_API}?nonce=${stored.nonce}`);
+      const data = await res.json();
+
+      if (!data.verified) {
+        await interaction.editReply(
+          "Not verified yet. Complete the signing on the website, then click **Check Verification** again."
+        );
+        return;
+      }
+
+      verifyNonces.delete(interaction.user.id);
+
+      if (!data.holdings || data.holdings.length === 0) {
+        await interaction.editReply(
+          `Wallet \`${data.address}\` verified but holds no tracked collections.`
+        );
+        return;
+      }
+
+      const roles = await ensureRoles(interaction.guild);
+      const added = [];
+
+      for (const h of data.holdings) {
+        const role = roles[h.name];
+        if (role && !interaction.member.roles.cache.has(role.id)) {
+          await interaction.member.roles.add(role);
+          added.push(role.name);
+        }
+      }
+
+      const lines = data.holdings.map(
+        (h) => `**${h.name}** — ${h.balance} held`
+      );
+      const roleText =
+        added.length > 0
+          ? `\nRoles assigned: ${added.join(", ")}`
+          : "\nYou already have all applicable roles.";
+
+      await interaction.editReply(
+        `Wallet \`${data.address}\` verified!\n\n${lines.join("\n")}${roleText}`
+      );
+    } catch (err) {
+      console.error("Verify check error:", err.message);
+      await interaction.editReply("Failed to check verification. Try again.");
+    }
     return;
   }
 
