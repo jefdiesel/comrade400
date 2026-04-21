@@ -1180,22 +1180,22 @@ client.on("interactionCreate", async (interaction) => {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setLabel("Connect Wallet & Sign")
+        .setLabel("Open Verification Page")
         .setStyle(ButtonStyle.Link)
         .setURL(verifyUrl),
       new ButtonBuilder()
         .setCustomId("verify_check")
-        .setLabel("Check Verification")
+        .setLabel("I've Signed — Check Now")
         .setStyle(ButtonStyle.Success)
     );
 
     await interaction.reply({
       content: [
-        "**Wallet Verification**",
+        "**Verify your Comrades holdings**",
         "",
-        "1. Click **Connect Wallet & Sign** to open the verification page",
-        "2. Connect your wallet and sign the message",
-        "3. Come back here and click **Check Verification**",
+        "1. Click **Open Verification Page** — opens chainhost.online in your browser",
+        "2. Connect your wallet (MetaMask, Phantom, etc.) and sign the message",
+        "3. Once the site says **Verified**, come back here and click **I've Signed — Check Now**",
       ].join("\n"),
       components: [row],
       ephemeral: true,
