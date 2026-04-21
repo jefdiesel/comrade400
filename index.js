@@ -1243,9 +1243,16 @@ client.on("interactionCreate", async (interaction) => {
       const resized = await resizeBuffer(buffer, DEFAULT_SIZE);
       const idx = yonderData.indexOf(entry) + 1;
       const file = new AttachmentBuilder(resized, { name: `yonder_${idx}.png` });
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel("Download 1600x1600")
+          .setStyle(ButtonStyle.Link)
+          .setURL(`https://nomorelabs.xyz/yonder.html`)
+      );
       await interaction.editReply({
         content: `**Yonder #${idx} — ${entry.name}**`,
         files: [file],
+        components: [row],
       });
     } catch (err) {
       console.error("Yonder display failed:", err.message);
