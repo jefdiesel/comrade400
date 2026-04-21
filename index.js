@@ -1180,12 +1180,12 @@ client.on("interactionCreate", async (interaction) => {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setLabel("Open Verification Page")
+        .setLabel(">>> Step 1: Open & Sign <<<")
         .setStyle(ButtonStyle.Link)
         .setURL(verifyUrl),
       new ButtonBuilder()
         .setCustomId("verify_check")
-        .setLabel("I've Signed — Check Now")
+        .setLabel("Step 2: Get My Roles")
         .setStyle(ButtonStyle.Success)
     );
 
@@ -1193,9 +1193,8 @@ client.on("interactionCreate", async (interaction) => {
       content: [
         "**Verify your Comrades holdings**",
         "",
-        "1. Click **Open Verification Page** — opens chainhost.online in your browser",
-        "2. Connect your wallet (MetaMask, Phantom, etc.) and sign the message",
-        "3. Once the site says **Verified**, come back here and click **I've Signed — Check Now**",
+        "1. Click **Step 1** below — connect your wallet and sign on chainhost.online",
+        "2. Once the site says **Verified**, come back and click **Step 2** to get your roles",
       ].join("\n"),
       components: [row],
       ephemeral: true,
