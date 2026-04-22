@@ -1042,17 +1042,13 @@ client.once("ready", async () => {
         )
     );
 
-  const verifyCommand = new SlashCommandBuilder()
-    .setName("verify")
-    .setDescription("Verify your Ethscriptions wallet holdings and get holder roles");
-
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
-      verifyCommand.toJSON(), yonderCommand.toJSON(),
+      yonderCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
