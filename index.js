@@ -1042,13 +1042,17 @@ client.once("ready", async () => {
         )
     );
 
+  const chatCommand = new SlashCommandBuilder()
+    .setName("chat")
+    .setDescription("Speak to the Comrade");
+
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
-      yonderCommand.toJSON(),
+      yonderCommand.toJSON(), chatCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1135,6 +1139,11 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   // Slash command: /comrade400 help
+  if (interaction.isChatInputCommand() && interaction.commandName === "chat") {
+    await interaction.reply("I WILL DESTROY THE UNIVERSE");
+    return;
+  }
+
   if (interaction.isChatInputCommand() && interaction.commandName === "comrade400") {
     const helpText = [
       "# Comrade400 Bot",
