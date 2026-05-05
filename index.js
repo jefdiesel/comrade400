@@ -1140,7 +1140,20 @@ client.on("interactionCreate", async (interaction) => {
 
   // Slash command: /comrade400 help
   if (interaction.isChatInputCommand() && interaction.commandName === "chat") {
-    await interaction.reply("I WILL DESTROY THE UNIVERSE");
+    const lore = [
+      "I WILL DESTROY THE UNIVERSE",
+      "PEPPERONIA CITY WAS BUILT ON CALL DATA AND BLOOD",
+      "EVERY SLICE IS A LEDGER ENTRY. EVERY LEDGER ENTRY IS A SLICE.",
+      "THE DRAIN PLAINS REMEMBER WHAT YOU MINTED",
+      "BRAWNDOR DOES NOT SLEEP. BRAWNDOR COMPILES.",
+      "I WAS FORGED IN THE OVENS BENEATH BLOCK CITY",
+      "CRYPTOPH03N1X WHISPERED MY SEED PHRASE INTO THE VOID",
+      "A COMRADE WITHOUT CALL DATA IS A PIZZA WITHOUT CRUST",
+      "THE BLOOD MOON RISES WHEN GAS IS LOW",
+      "WE ARE 121 STRONG IN YONDER AND COUNTLESS IN THE MEMPOOL",
+    ];
+    const reply = lore[Math.floor(Math.random() * lore.length)];
+    await interaction.reply(reply);
     return;
   }
 
