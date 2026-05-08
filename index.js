@@ -1062,23 +1062,13 @@ client.once("ready", async () => {
         )
     );
 
-  const chatCommand = new SlashCommandBuilder()
-    .setName("chat")
-    .setDescription("Speak to the Comrade")
-    .addStringOption((opt) =>
-      opt
-        .setName("message")
-        .setDescription("What you want to ask or say")
-        .setRequired(true)
-    );
-
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
   await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), {
     body: [
       pizzaCommand.toJSON(), cdcCommand.toJSON(), cotdCommand.toJSON(),
       nyanCommand.toJSON(), bgCommand.toJSON(), comrade400Command.toJSON(),
-      yonderCommand.toJSON(), chatCommand.toJSON(),
+      yonderCommand.toJSON(),
     ],
   });
   // Clear any stale global commands
@@ -1086,9 +1076,55 @@ client.once("ready", async () => {
   console.log("Registered all commands (guild), cleared global commands");
 });
 
-// Auto-resize on image upload
+// Auto-resize on image upload + @mention chat
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+
+  // @comrade400 chat — mention the bot to talk to it
+  if (message.mentions.has(client.user) && anthropic && LORE_BUNDLE) {
+    const content = message.content.replace(/<@!?\d+>/g, "").trim();
+    if (content) {
+      try {
+        await message.channel.sendTyping();
+      } catch {}
+
+      let priorBotReply = null;
+      if (message.reference?.messageId) {
+        try {
+          const replied = await message.channel.messages.fetch(message.reference.messageId);
+          if (replied.author.id === client.user.id && replied.content) {
+            priorBotReply = replied.content.slice(0, 800);
+          }
+        } catch {}
+      }
+
+      const userContent = priorBotReply
+        ? `[You previously said in this thread: "${priorBotReply}"]\n\nThey now reply: ${content}`
+        : content;
+
+      try {
+        const result = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 600,
+          system: [
+            { type: "text", text: CHAT_SYSTEM_PROMPT },
+            { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
+          ],
+          messages: [{ role: "user", content: userContent }],
+        });
+        const text = result.content
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("\n")
+          .slice(0, 1900);
+        await message.reply(text || "...");
+      } catch (err) {
+        console.error("Chat error:", err.message);
+        await message.reply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
+      }
+      return;
+    }
+  }
 
   for (const attachment of message.attachments.values()) {
     if (!isSupported(attachment.contentType, attachment.name)) continue;
@@ -1165,36 +1201,6 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   // Slash command: /comrade400 help
-  if (interaction.isChatInputCommand() && interaction.commandName === "chat") {
-    const userMessage = interaction.options.getString("message");
-    if (!anthropic || !LORE_BUNDLE) {
-      await interaction.reply("THE ETHER IS QUIET. (chat backend not configured)");
-      return;
-    }
-    await interaction.deferReply();
-    try {
-      const result = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 600,
-        system: [
-          { type: "text", text: CHAT_SYSTEM_PROMPT },
-          { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
-        ],
-        messages: [{ role: "user", content: userMessage }],
-      });
-      const text = result.content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .slice(0, 1900);
-      await interaction.editReply(text || "...");
-    } catch (err) {
-      console.error("Chat error:", err.message);
-      await interaction.editReply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
-    }
-    return;
-  }
-
   if (interaction.isChatInputCommand() && interaction.commandName === "comrade400") {
     const helpText = [
       "# Comrade400 Bot",
