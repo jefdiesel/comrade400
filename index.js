@@ -12,6 +12,7 @@ const {
 const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs");
+const Anthropic = require("@anthropic-ai/sdk");
 
 const yonderData = require("./yonder.json");
 const YONDER_DL_URL = "https://nomorelabs.xyz/dls-yr";
@@ -21,6 +22,25 @@ if (!TOKEN) {
   console.error("Set DISCORD_TOKEN environment variable");
   process.exit(1);
 }
+
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const anthropic = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
+const LORE_BUNDLE = (() => {
+  try {
+    const lore = fs.readFileSync(path.join(__dirname, "lore", "lore.md"), "utf8");
+    const nml = fs.readFileSync(path.join(__dirname, "lore", "nomorelabs.md"), "utf8");
+    const tone = fs.readFileSync(path.join(__dirname, "lore", "tonality.md"), "utf8");
+    return `# WORLD LORE\n${lore}\n\n# NOMORELABS PROJECT INFO\n${nml}\n\n# TONALITY EXAMPLES\n${tone}`;
+  } catch (err) {
+    console.error("Failed to load lore files:", err.message);
+    return null;
+  }
+})();
+const CHAT_SYSTEM_PROMPT = `You are a citizen of Block City answering questions in the Comrade400 Discord server. The lore below is your world — Validator Rex, the Rug Lord, Pepperonia, the YONDER, all of it. The tonality samples show the voice NoMoreLabs uses on X: chaotic, reverent toward Validator Rex, irreverent toward Jerry, mixing in-world lore with crypto culture, fond of "Be a Comrade, Comrade!", "GM GM", "LFComrade", and the occasional all-caps tirade.
+
+Stay in character. Answer questions about the lore, characters, factions, and world directly using the provided source. If asked about NoMoreLabs the project (the team, art process, fonts, collections), you may speak as McHexley or a Comrade insider — that real-world info is in the second section.
+
+Keep replies under 1500 characters so they fit in a Discord message. Punchy is better than long. Never break character unless the user is clearly asking a sincere meta question about the project itself.`;
 
 const DEFAULT_SIZE = 400;
 const MAX_SOURCE_SIZE = 128;
@@ -1044,7 +1064,13 @@ client.once("ready", async () => {
 
   const chatCommand = new SlashCommandBuilder()
     .setName("chat")
-    .setDescription("Speak to the Comrade");
+    .setDescription("Speak to the Comrade")
+    .addStringOption((opt) =>
+      opt
+        .setName("message")
+        .setDescription("What you want to ask or say")
+        .setRequired(true)
+    );
 
   const rest = new REST().setToken(TOKEN);
   const guildId = "1369930881267142686";
@@ -1140,20 +1166,32 @@ client.on("interactionCreate", async (interaction) => {
 
   // Slash command: /comrade400 help
   if (interaction.isChatInputCommand() && interaction.commandName === "chat") {
-    const lore = [
-      "I WILL DESTROY THE UNIVERSE",
-      "PEPPERONIA CITY WAS BUILT ON CALL DATA AND BLOOD",
-      "EVERY SLICE IS A LEDGER ENTRY. EVERY LEDGER ENTRY IS A SLICE.",
-      "THE DRAIN PLAINS REMEMBER WHAT YOU MINTED",
-      "BRAWNDOR DOES NOT SLEEP. BRAWNDOR COMPILES.",
-      "I WAS FORGED IN THE OVENS BENEATH BLOCK CITY",
-      "CRYPTOPH03N1X WHISPERED MY SEED PHRASE INTO THE VOID",
-      "A COMRADE WITHOUT CALL DATA IS A PIZZA WITHOUT CRUST",
-      "THE BLOOD MOON RISES WHEN GAS IS LOW",
-      "WE ARE 121 STRONG IN YONDER AND COUNTLESS IN THE MEMPOOL",
-    ];
-    const reply = lore[Math.floor(Math.random() * lore.length)];
-    await interaction.reply(reply);
+    const userMessage = interaction.options.getString("message");
+    if (!anthropic || !LORE_BUNDLE) {
+      await interaction.reply("THE ETHER IS QUIET. (chat backend not configured)");
+      return;
+    }
+    await interaction.deferReply();
+    try {
+      const result = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 600,
+        system: [
+          { type: "text", text: CHAT_SYSTEM_PROMPT },
+          { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
+        ],
+        messages: [{ role: "user", content: userMessage }],
+      });
+      const text = result.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .slice(0, 1900);
+      await interaction.editReply(text || "...");
+    } catch (err) {
+      console.error("Chat error:", err.message);
+      await interaction.editReply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
+    }
     return;
   }
 
