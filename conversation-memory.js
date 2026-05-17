@@ -40,10 +40,12 @@ async function getRecentMessages(sessionId, limit = 10) {
   return data.reverse();
 }
 
+const MAX_HISTORY_CHARS = 300;
+
 function toClaudeMessages(rows) {
   return rows
     .filter((r) => r.role === "user" || r.role === "assistant")
-    .map((r) => ({ role: r.role, content: r.content }));
+    .map((r) => ({ role: r.role, content: r.content.slice(0, MAX_HISTORY_CHARS) }));
 }
 
 async function getContext(sessionId, limit = 10) {

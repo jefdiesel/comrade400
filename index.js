@@ -1095,32 +1095,18 @@ client.on("messageCreate", async (message) => {
         await message.channel.sendTyping();
       } catch {}
 
-      let priorBotReply = null;
-      if (message.reference?.messageId) {
-        try {
-          const replied = await message.channel.messages.fetch(message.reference.messageId);
-          if (replied.author.id === client.user.id && replied.content) {
-            priorBotReply = replied.content.slice(0, 800);
-          }
-        } catch {}
-      }
-
-      const userContent = priorBotReply
-        ? `[You previously said in this thread: "${priorBotReply}"]\n\nThey now reply: ${content}`
-        : content;
-
       const sessionId = message.channel.id;
-      const history = await getContext(sessionId, 10);
+      const history = await getContext(sessionId, 4);
 
       try {
         const result = await anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 600,
+          max_tokens: 250,
           system: [
             { type: "text", text: CHAT_SYSTEM_PROMPT },
             { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
           ],
-          messages: [...history, { role: "user", content: userContent }],
+          messages: [...history, { role: "user", content }],
         });
         const text = result.content
           .filter((b) => b.type === "text")
@@ -1128,7 +1114,7 @@ client.on("messageCreate", async (message) => {
           .join("\n")
           .slice(0, 1900);
         await message.reply(text || "...");
-        await saveTurn(sessionId, userContent, text);
+        await saveTurn(sessionId, content, text);
       } catch (err) {
         console.error("Chat error:", err.message);
         await message.reply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
