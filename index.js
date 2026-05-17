@@ -13,6 +13,7 @@ const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs");
 const Anthropic = require("@anthropic-ai/sdk");
+const { saveTurn, getContext } = require("./conversation-memory");
 
 const yonderData = require("./yonder.json");
 const YONDER_DL_URL = "https://nomorelabs.xyz/dls-yr";
@@ -1107,6 +1108,9 @@ client.on("messageCreate", async (message) => {
         ? `[You previously said in this thread: "${priorBotReply}"]\n\nThey now reply: ${content}`
         : content;
 
+      const sessionId = message.channel.id;
+      const history = await getContext(sessionId, 10);
+
       try {
         const result = await anthropic.messages.create({
           model: "claude-sonnet-4-6",
@@ -1115,7 +1119,7 @@ client.on("messageCreate", async (message) => {
             { type: "text", text: CHAT_SYSTEM_PROMPT },
             { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
           ],
-          messages: [{ role: "user", content: userContent }],
+          messages: [...history, { role: "user", content: userContent }],
         });
         const text = result.content
           .filter((b) => b.type === "text")
@@ -1123,6 +1127,7 @@ client.on("messageCreate", async (message) => {
           .join("\n")
           .slice(0, 1900);
         await message.reply(text || "...");
+        await saveTurn(sessionId, userContent, text);
       } catch (err) {
         console.error("Chat error:", err.message);
         await message.reply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
