@@ -1087,8 +1087,9 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // @comrade400 chat — mention the bot to talk to it
-  if (message.mentions.has(client.user) && anthropic && LORE_BUNDLE) {
+  // @comrade400 chat — mention the bot or say "grub" to talk to it
+  const grubTrigger = /\bgrub\b/i.test(message.content);
+  if ((message.mentions.has(client.user) || grubTrigger) && anthropic && LORE_BUNDLE) {
     const content = message.content.replace(/<@!?\d+>/g, "").trim();
     if (content) {
       try {
