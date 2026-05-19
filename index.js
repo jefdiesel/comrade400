@@ -1117,11 +1117,18 @@ client.on("messageCreate", async (message) => {
           ],
           messages: [...history, { role: "user", content }],
         });
-        const text = result.content
+        let text = result.content
           .filter((b) => b.type === "text")
           .map((b) => b.text)
           .join("\n")
           .slice(0, 1900);
+        // Replace :emoji-name: shortcodes with renderable <:name:id> from this guild
+        if (message.guild) {
+          text = text.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
+            const emoji = message.guild.emojis.cache.find((e) => e.name === name);
+            return emoji ? emoji.toString() : match;
+          });
+        }
         await message.reply(text || "...");
         await saveTurn(sessionId, content, text);
       } catch (err) {
