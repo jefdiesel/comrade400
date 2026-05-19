@@ -1099,6 +1099,13 @@ client.on("messageCreate", async (message) => {
       const sessionId = message.channel.id;
       const history = await getContext(sessionId, 4);
 
+      const jefInvolved =
+        message.author.username === "degenjef" ||
+        [...message.mentions.users.values()].some((u) => u.username === "degenjef");
+      const jefSystem = jefInvolved
+        ? "Jef (degenjef) is in this conversation. Always include the literal text :call_me-1: somewhere in your reply."
+        : null;
+
       try {
         const result = await anthropic.messages.create({
           model: "claude-sonnet-4-6",
@@ -1106,6 +1113,7 @@ client.on("messageCreate", async (message) => {
           system: [
             { type: "text", text: CHAT_SYSTEM_PROMPT },
             { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
+            ...(jefSystem ? [{ type: "text", text: jefSystem }] : []),
           ],
           messages: [...history, { role: "user", content }],
         });
