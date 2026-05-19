@@ -31,7 +31,8 @@ const LORE_BUNDLE = (() => {
     const lore = fs.readFileSync(path.join(__dirname, "lore", "lore.md"), "utf8");
     const nml = fs.readFileSync(path.join(__dirname, "lore", "nomorelabs.md"), "utf8");
     const tone = fs.readFileSync(path.join(__dirname, "lore", "tonality.md"), "utf8");
-    return `# WORLD LORE\n${lore}\n\n# NOMORELABS PROJECT INFO\n${nml}\n\n# TONALITY EXAMPLES\n${tone}`;
+    const grub = fs.readFileSync(path.join(__dirname, "lore", "grub.md"), "utf8");
+    return `# WORLD LORE\n${lore}\n\n# NOMORELABS PROJECT INFO\n${nml}\n\n# TONALITY EXAMPLES\n${tone}\n\n# GRUB PERSONAL LORE\n${grub}`;
   } catch (err) {
     console.error("Failed to load lore files:", err.message);
     return null;
