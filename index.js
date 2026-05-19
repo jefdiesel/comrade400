@@ -1100,12 +1100,27 @@ client.on("messageCreate", async (message) => {
       const sessionId = message.channel.id;
       const history = await getContext(sessionId, 4);
 
+      const speakerName =
+        message.member?.displayName || message.author.globalName || message.author.username;
+      const speakerHandle = message.author.username;
+      const mentionedNames = [...message.mentions.users.values()]
+        .map((u) => {
+          const member = message.guild?.members?.cache?.get(u.id);
+          const display = member?.displayName || u.globalName || u.username;
+          return `${display} (@${u.username})`;
+        })
+        .join(", ");
+
       const jefInvolved =
-        message.author.username === "degenjef" ||
+        speakerHandle === "degenjef" ||
         [...message.mentions.users.values()].some((u) => u.username === "degenjef");
       const jefSystem = jefInvolved
         ? "Jef (degenjef) is in this conversation. Always include the 🤙 emoji somewhere in your reply."
         : null;
+
+      const identitySystem = `Each user message is prefixed with the speaker in the form "<DisplayName> (@handle): ...". Always use that prefix to know who is talking. When asked "who am I" or "what's my name", answer with the DisplayName from the prefix on the current message. Never claim you cannot see who is speaking.`;
+
+      const userContent = `${speakerName} (@${speakerHandle})${mentionedNames ? ` [mentions: ${mentionedNames}]` : ""}: ${content}`;
 
       try {
         const result = await anthropic.messages.create({
@@ -1114,9 +1129,10 @@ client.on("messageCreate", async (message) => {
           system: [
             { type: "text", text: CHAT_SYSTEM_PROMPT },
             { type: "text", text: LORE_BUNDLE, cache_control: { type: "ephemeral" } },
+            { type: "text", text: identitySystem },
             ...(jefSystem ? [{ type: "text", text: jefSystem }] : []),
           ],
-          messages: [...history, { role: "user", content }],
+          messages: [...history, { role: "user", content: userContent }],
         });
         let text = result.content
           .filter((b) => b.type === "text")
@@ -1146,7 +1162,7 @@ client.on("messageCreate", async (message) => {
           });
         }
         await message.reply(text || "...");
-        await saveTurn(sessionId, content, text);
+        await saveTurn(sessionId, userContent, text);
       } catch (err) {
         console.error("Chat error:", err.message);
         await message.reply("THE BIG BLOCK IN THE SKY IS CLOUDED OVER. (chat error)");
