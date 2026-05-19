@@ -1122,10 +1122,25 @@ client.on("messageCreate", async (message) => {
           .map((b) => b.text)
           .join("\n")
           .slice(0, 1900);
-        // Replace :emoji-name: shortcodes with renderable <:name:id> from this guild
+        // Replace :emoji-name: shortcodes with renderable <:name:id> from this guild.
+        // Discord custom emoji names only allow [a-zA-Z0-9_], so try variants if exact match fails.
         if (message.guild) {
+          const emojis = message.guild.emojis.cache;
           text = text.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
-            const emoji = message.guild.emojis.cache.find((e) => e.name === name);
+            const candidates = [
+              name,
+              name.replace(/-/g, "_"),
+              name.replace(/_/g, ""),
+              name.replace(/-/g, ""),
+            ];
+            const lc = name.toLowerCase();
+            const emoji =
+              emojis.find((e) => candidates.includes(e.name)) ||
+              emojis.find((e) => e.name.toLowerCase() === lc) ||
+              emojis.find((e) => e.name.toLowerCase().replace(/[_-]/g, "") === lc.replace(/[_-]/g, ""));
+            if (!emoji) {
+              console.log(`Emoji not found for :${name}: — available:`, emojis.map((e) => e.name).join(", "));
+            }
             return emoji ? emoji.toString() : match;
           });
         }
