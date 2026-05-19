@@ -1103,7 +1103,7 @@ client.on("messageCreate", async (message) => {
         message.author.username === "degenjef" ||
         [...message.mentions.users.values()].some((u) => u.username === "degenjef");
       const jefSystem = jefInvolved
-        ? "Jef (degenjef) is in this conversation. Always include the literal text :call_me-1: somewhere in your reply."
+        ? "Jef (degenjef) is in this conversation. Always include the 🤙 emoji somewhere in your reply."
         : null;
 
       try {
